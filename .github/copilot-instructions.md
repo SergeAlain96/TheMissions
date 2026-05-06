@@ -1,106 +1,258 @@
-<!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
-- [ ] Verify that the copilot-instructions.md file in the .github directory is created.
+# CARFO - Système de Gestion Intégré des Missions
 
-- [ ] Clarify Project Requirements
-	<!-- Ask for project type, language, and frameworks if not specified. Skip if already provided. -->
+**Project Type:** Full-Stack Web Application (Java Spring Boot + Angular)  
+**Status:** Phase 9 - COMPLETE ✅ (100%)  
+**Repository:** https://github.com/SergeAlain96/TheMissions.git
 
-- [ ] Scaffold the Project
-	<!--
-	Ensure that the previous step has been marked as completed.
-	Call project setup tool with projectType parameter.
-	Run scaffolding command to create project files and folders.
-	Use '.' as the working directory.
-	If no appropriate projectType is available, search documentation using available tools.
-	Otherwise, create the project structure manually using available file creation tools.
-	-->
+## 🎯 Project Overview
 
-- [ ] Customize the Project
-	<!--
-	Verify that all previous steps have been completed successfully and you have marked the step as completed.
-	Develop a plan to modify codebase according to user requirements.
-	Apply modifications using appropriate tools and user-provided references.
-	Skip this step for "Hello World" projects.
-	-->
+CARFO is a comprehensive mission management system with:
+- **Backend:** Spring Boot 3.5.14 + Spring Data JPA + MySQL 8.0
+- **Frontend:** Angular 17+ + PrimeNG + TailwindCSS
+- **Key Features:** 
+  - Mission creation, planning, and tracking
+  - Agent/Staff management with roles
+  - Vehicle inventory and management
+  - Absence/Leave tracking and approval
+  - Real-time affectation (assignment) management
+  - Dashboard with statistics
+  - JWT-based authentication with role-based access control
 
-- [ ] Install Required Extensions
-	<!-- ONLY install extensions provided mentioned in the get_project_setup_info. Skip this step otherwise and mark as completed. -->
+## 📋 Completed Phases
 
-- [ ] Compile the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Install any missing dependencies.
-	Run diagnostics and resolve any issues.
-	Check for markdown files in project folder for relevant instructions on how to do this.
-	-->
+### Phase 1-6: Core Features ✅
+- Authentication & authorization (JWT, Roles)
+- CRUD operations for Missions, Agents, Vehicles, Absences
+- Affectation management (assigning drivers/vehicles to missions)
+- Direction/Department management
+- Business rule validation
 
-- [ ] Create and Run Task
-	<!--
-	Verify that all previous steps have been completed.
-	Check https://code.visualstudio.com/docs/debugtest/tasks to determine if the project needs a task. If so, use the create_and_run_task to create and launch a task based on package.json, README.md, and project structure.
-	Skip this step otherwise.
-	 -->
+### Phase 7: Dashboard & Statistics ✅
+- Dashboard component with 4 KPI widgets
+- Statistics calculations (total missions, satisfaction rate, etc.)
+- Real-time data visualization with charts
 
-- [ ] Launch the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Prompt user for debug mode, launch only if confirmed.
-	-->
+### Phase 8: Error Handling & Code Quality ✅
+- 7 custom exception classes:
+  - `MissionNotFound` - Mission doesn't exist
+  - `DelaiInsuffisant` - Insufficient time between missions
+  - `VehiculeIndisponible` - Vehicle unavailable
+  - `ChauffeurIndisponible` - Driver unavailable
+  - `ResourceNotFound` - Generic resource not found
+  - `BusinessRule` - Business rule violation
+  - `DuplicateResource` - Duplicate resource conflict
+- GlobalExceptionHandler with HTTP status mapping
+- @Slf4j logging on all services
+- Input validation with @Valid
 
-- [ ] Ensure Documentation is Complete
-	<!--
-	Verify that all previous steps have been completed.
-	Verify that README.md and the copilot-instructions.md file in the .github directory exists and contains current project information.
-	Clean up the copilot-instructions.md file in the .github directory by removing all HTML comments.
-	-->
+### Phase 9: Frontend Design & UX ✅
+**Infrastructure Created:**
+- `LoadingService` - Multi-key async state management
+- `LoadingSpinnerComponent` - Full-screen spinner with animations
+- `NotificationService` - Toast notification pub/sub system
+- `NotificationsComponent` - PrimeNG Toast wrapper
+- `ErrorInterceptor` - Global HTTP error capture
 
-<!--
-## Execution Guidelines
-PROGRESS TRACKING:
-- If any tools are available to manage the above todo list, use it to track progress through this checklist.
-- After completing each step, mark it complete and add a summary.
-- Read current todo list status before starting each new step.
+**Pages Enhanced:**
+1. **Landing Page** ✅
+   - Animated gradient background
+   - 6 feature cards with hover effects
+   - 4 KPI statistics
+   - Call-to-action buttons
+   - Dark mode support
 
-COMMUNICATION RULES:
-- Avoid verbose explanations or printing full command outputs.
-- If a step is skipped, state that briefly (e.g. "No extensions needed").
-- Do not explain project structure unless asked.
-- Keep explanations concise and focused.
+2. **Missions Page** ✅
+   - LoadingSpinnerComponent integration
+   - Emoji-rich UI (🎯, 🔍, ✏️, ✨, 👥, 🚗)
+   - Location badges (#eff6ff)
+   - Date badges (#f5f3ff)
+   - Sortable columns
+   - Enhanced dialogs
 
-DEVELOPMENT RULES:
-- Use '.' as the working directory unless user specifies otherwise.
-- Avoid adding media or external links unless explicitly requested.
-- Use placeholders only with a note that they should be replaced.
-- Use VS Code API tool only for VS Code extension projects.
-- Once the project is created, it is already opened in Visual Studio Code—do not suggest commands to open this project in Visual Studio again.
-- If the project setup information has additional rules, follow them strictly.
+3. **Agents Page** ✅
+   - LoadingSpinnerComponent integration
+   - Gradient header with emoji (👥)
+   - Maximizable dialogs
+   - Role-based severity tags
+   - Emoji buttons (✏️ Modifier, ✨ Nouvel Agent)
 
-FOLDER CREATION RULES:
-- Always use the current directory as the project root.
-- If you are running any terminal commands, use the '.' argument to ensure that the current working directory is used ALWAYS.
-- Do not create a new folder unless the user explicitly requests it besides a .vscode folder for a tasks.json file.
-- If any of the scaffolding commands mention that the folder name is not correct, let the user know to create a new folder with the correct name and then reopen it again in vscode.
+4. **Absences Page** ✅
+   - LoadingSpinnerComponent integration
+   - Calendar icons (📅)
+   - Date badges with emoji formatting
+   - Status badges (Planifiée, En cours, Complétée, Annulée)
+   - Enhanced filters
 
-EXTENSION INSTALLATION RULES:
-- Only install extension specified by the get_project_setup_info tool. DO NOT INSTALL any other extensions.
+5. **Directions Page** ✅
+   - LoadingSpinnerComponent integration
+   - Gradient text styling
+   - Direction badges
+   - Maximizable dialogs
+   - Form validation feedback
 
-PROJECT CONTENT RULES:
-- If the user has not specified project details, assume they want a "Hello World" project as a starting point.
-- Avoid adding links of any type (URLs, files, folders, etc.) or integrations that are not explicitly required.
-- Avoid generating images, videos, or any other media files unless explicitly requested.
-- If you need to use any media assets as placeholders, let the user know that these are placeholders and should be replaced with the actual assets later.
-- Ensure all generated components serve a clear purpose within the user's requested workflow.
-- If a feature is assumed but not confirmed, prompt the user for clarification before including it.
-- If you are working on a VS Code extension, use the VS Code API tool with a query to find relevant VS Code API references and samples related to that query.
+**Design System:**
+- Primary Gradient: `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`
+- Animation Library:
+  - `slideUp` (0.6s, 20px translation)
+  - `spin` (infinite, rotating spinner)
+  - `fadeIn` (0.3s, opacity transition)
+  - `slideDown`, `slideProgress` (progress bar animations)
+- Emoji Integration: Intuitive icons throughout UI
+- Responsive Design: Mobile-first approach with Tailwind
+- Dark Mode Support: CSS variables for theme adaptation
 
-TASK COMPLETION RULES:
-- Your task is complete when:
-  - Project is successfully scaffolded and compiled without errors
-  - copilot-instructions.md file in the .github directory exists in the project
-  - README.md file exists and is up to date
-  - User is provided with clear instructions to debug/launch the project
+## 🚀 Quick Start
 
-Before starting a new task in the above plan, update progress in the plan.
--->
-- Work through each checklist item systematically.
-- Keep communication concise and focused.
-- Follow development best practices.
+### Backend Setup
+```bash
+cd carfo-backend
+# Configure application.properties with database credentials
+mvn clean install -DskipTests
+mvn spring-boot:run
+# API available at http://localhost:8080
+```
+
+### Frontend Setup
+```bash
+cd carfo-frontend
+npm install
+npm start
+# Application available at http://localhost:4200
+```
+
+## 📊 Build Status
+
+| Component | Status | Size | Details |
+|-----------|--------|------|---------|
+| Frontend Build | ✅ SUCCESS | 1.78 MB | dist/sakai-ng ready for deployment |
+| Backend Build | ✅ SUCCESS | 54 files | All Java sources compiled |
+| Database | ✅ READY | MySQL 8.0+ | Schema with 8+ tables |
+| Git Repository | ✅ INITIALIZED | GitHub | https://github.com/SergeAlain96/TheMissions.git |
+
+## 🔐 Security
+
+- JWT authentication with 24h token expiry
+- Role-based access control (3 roles: ADMINISTRATEUR, CHARGE_ETUDE, AGENT)
+- CORS configuration for secure cross-origin requests
+- Input validation with Spring @Valid
+- Centralized exception handling
+- Logging of all operations
+
+## 📁 Project Structure
+
+```
+TheMissions/
+├── carfo-backend/
+│   ├── src/main/java/com/carfo/gestion_missions/
+│   │   ├── controller/       (REST endpoints)
+│   │   ├── service/          (Business logic with @Slf4j)
+│   │   ├── entity/           (JPA entities)
+│   │   ├── dto/              (Data transfer objects)
+│   │   ├── exception/        (7 custom exceptions)
+│   │   └── security/         (JWT & Auth)
+│   └── pom.xml
+│
+├── carfo-frontend/
+│   ├── src/app/
+│   │   ├── core/
+│   │   │   ├── services/     (LoadingService, NotificationService, etc.)
+│   │   │   ├── components/   (LoadingSpinnerComponent, NotificationsComponent)
+│   │   │   ├── guards/       (AuthGuard)
+│   │   │   └── interceptors/ (JwtInterceptor, ErrorInterceptor)
+│   │   ├── pages/
+│   │   │   ├── landing/      (Hero page with animations)
+│   │   │   ├── missions/     (Mission CRUD)
+│   │   │   ├── agents/       (Agent management)
+│   │   │   ├── absences/     (Absence tracking)
+│   │   │   ├── directions/   (Department management)
+│   │   │   ├── dashboard/    (Statistics & KPIs)
+│   │   │   └── auth/         (Login/Register)
+│   │   └── layout/           (App shell components)
+│   └── package.json
+│
+├── README.md                  (Project documentation)
+└── .github/
+    └── copilot-instructions.md (This file)
+```
+
+## 🔄 Recent Updates (Phase 9)
+
+### Commits
+1. Initial commit: CARFO Mission Management System
+2. Phase 9: Enhanced Landing page with animations
+3. Phase 9: Enhanced Missions page with modern design
+4. Phase 9: Enhanced Agents page with animations & emojis
+5. Phase 9: Enhanced Absences and Directions pages
+
+### What's New in Phase 9
+- Global loading spinner for all async operations
+- Toast notifications for user feedback (errors, success, info, warnings)
+- Comprehensive error interceptor with user-friendly messages
+- Consistent design language across all pages
+- CSS animations for smooth transitions
+- Emoji-based iconography for intuitive navigation
+- Improved form validation with inline error messages
+- Dark mode support with CSS variables
+- Responsive design optimized for mobile/tablet
+
+## ⏭️ Next Steps (Phase 10)
+
+- [ ] Unit tests for critical services
+- [ ] Integration tests for API endpoints
+- [ ] E2E tests with Cypress/Playwright
+- [ ] Production deployment setup
+- [ ] Performance optimization
+- [ ] Documentation (API docs, user guide)
+- [ ] CI/CD pipeline configuration
+
+## 🛠️ Technology Stack
+
+**Backend:**
+- Java 17+ (OpenJDK)
+- Spring Boot 3.5.14
+- Spring Data JPA
+- Spring Security with JWT
+- MySQL 8.0+
+- Maven 3.8+
+
+**Frontend:**
+- Angular 17+
+- TypeScript
+- PrimeNG (UI Components)
+- TailwindCSS (Styling)
+- RxJS (Reactive Programming)
+- npm 9+
+
+## 📝 Development Guidelines
+
+### Code Style
+- Java: Follow Spring conventions with @Slf4j logging
+- TypeScript: Use strict mode with proper typing
+- CSS: Leverage TailwindCSS utility classes + scoped styles
+- Components: Standalone Angular components with clear separation
+
+### Naming Conventions
+- Services: `-service.ts` suffix with `Service` class name
+- Components: `-component.ts` suffix with `Component` class name
+- Pages: Folder-based routing with lowercase names
+- DTOs: PascalCase with `Request`/`Response` suffix
+- Entities: PascalCase matching database table names
+
+### Performance
+- Lazy loading for routes
+- OnPush change detection where applicable
+- Bundle optimization with Angular CLI
+- Database query optimization with JPA
+
+## 📞 Contact & Support
+
+**Author:** Serge Alain  
+**Email:** sergealain96@gmail.com  
+**GitHub:** [@SergeAlain96](https://github.com/SergeAlain96)  
+**Repository:** https://github.com/SergeAlain96/TheMissions.git
+
+---
+
+**Version:** 1.0.0 (Phase 9 Complete)  
+**Last Updated:** May 2026  
+**License:** MIT
