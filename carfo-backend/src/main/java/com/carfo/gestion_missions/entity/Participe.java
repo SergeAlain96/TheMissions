@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,6 +22,7 @@ public class Participe {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_mission", nullable = false)
+    @JsonIgnore
     private Mission mission;
 
     // Rôle dans la mission : CHEF_MISSION ou MEMBRE

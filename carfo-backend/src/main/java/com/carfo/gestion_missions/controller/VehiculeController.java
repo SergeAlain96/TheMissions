@@ -1,8 +1,10 @@
 package com.carfo.gestion_missions.controller;
 
+import com.carfo.gestion_missions.dto.VehiculeRequest;
 import com.carfo.gestion_missions.entity.Vehicule;
 import com.carfo.gestion_missions.enums.StatutVehicule;
 import com.carfo.gestion_missions.service.VehiculeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +30,12 @@ public class VehiculeController {
 
     @GetMapping("/disponibles")
     @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<Vehicule>> getVehiculesDisponibles() {
+    public ResponseEntity<List<Vehicule>> getVehiculesDisponibles(
+            @RequestParam(required = false) LocalDate dateDebut,
+            @RequestParam(required = false) LocalDate dateFin) {
+        if (dateDebut != null && dateFin != null) {
+            return ResponseEntity.ok(vehiculeService.getVehiculesDisponiblesSurPeriode(dateDebut, dateFin));
+        }
         return ResponseEntity.ok(vehiculeService.getVehiculesDisponibles());
     }
 
@@ -40,35 +47,20 @@ public class VehiculeController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
-    public ResponseEntity<Vehicule> createVehicule(@RequestBody Map<String, Object> body) {
-        String immatriculation = (String) body.get("immatriculation");
-        String marque = (String) body.get("marque");
-        String modele = (String) body.get("modele");
-        String typeVehicule = (String) body.get("typeVehicule");
-        Integer capacite = body.get("capacite") != null ? Integer.valueOf(body.get("capacite").toString()) : null;
-        LocalDate dateAcquisition = body.get("dateAcquisition") != null
-                ? LocalDate.parse(body.get("dateAcquisition").toString())
-                : null;
-
+    public ResponseEntity<Vehicule> createVehicule(@Valid @RequestBody VehiculeRequest request) {
         Vehicule vehicule = vehiculeService.createVehicule(
-                immatriculation, marque, modele, capacite, dateAcquisition, typeVehicule);
+                request.getImmatriculation(), request.getMarque(), request.getModele(),
+                request.getCapacite(), request.getDateAcquisition(), request.getTypeVehicule());
         return ResponseEntity.status(HttpStatus.CREATED).body(vehicule);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
-    public ResponseEntity<Vehicule> updateVehicule(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        String immatriculation = (String) body.get("immatriculation");
-        String marque = (String) body.get("marque");
-        String modele = (String) body.get("modele");
-        String typeVehicule = (String) body.get("typeVehicule");
-        Integer capacite = body.get("capacite") != null ? Integer.valueOf(body.get("capacite").toString()) : null;
-        LocalDate dateAcquisition = body.get("dateAcquisition") != null
-                ? LocalDate.parse(body.get("dateAcquisition").toString())
-                : null;
-
+    public ResponseEntity<Vehicule> updateVehicule(@PathVariable Long id,
+                                                    @Valid @RequestBody VehiculeRequest request) {
         return ResponseEntity.ok(vehiculeService.updateVehicule(
-                id, immatriculation, marque, modele, capacite, dateAcquisition, typeVehicule));
+                id, request.getImmatriculation(), request.getMarque(), request.getModele(),
+                request.getCapacite(), request.getDateAcquisition(), request.getTypeVehicule()));
     }
 
     @PatchMapping("/{id}/statut")

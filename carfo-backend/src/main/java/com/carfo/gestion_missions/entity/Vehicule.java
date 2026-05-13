@@ -1,6 +1,8 @@
 package com.carfo.gestion_missions.entity;
 
 import com.carfo.gestion_missions.enums.StatutVehicule;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Vehicule {
 
     @Id
@@ -49,5 +52,6 @@ public class Vehicule {
 
     // Affectations du véhicule
     @OneToMany(mappedBy = "vehicule", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Affectation> affectations;
 }

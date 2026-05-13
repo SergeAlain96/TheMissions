@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.service;
 
+import com.carfo.gestion_missions.dto.MissionRequest;
 import com.carfo.gestion_missions.dto.MissionViewDTO;
 import com.carfo.gestion_missions.entity.*;
 import com.carfo.gestion_missions.enums.StatutMission;
@@ -16,7 +17,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.List;
 
 @Slf4j
@@ -56,8 +56,6 @@ public class MissionService {
         if (dateFin.isBefore(dateDebut)) {
             throw new BusinessRuleException("La date de fin ne peut pas être avant la date de début.");
         }
-
-        verifierChevauchement(dateDebut, dateFin, null);
 
         Direction direction = directionRepository.findById(idDirection)
             .orElseThrow(() -> new ResourceNotFoundException("Direction introuvable : " + idDirection));
@@ -129,17 +127,14 @@ public class MissionService {
     }
 
     @Transactional
-    public Mission updateMission(Long idMission, LocalDate dateDebut, LocalDate dateFin,
-                                 String lieu, String objetMission,
-                                 Long idDirection, List<Long> idAgents,
-                                 List<String> rolesMission) {
+    public Mission updateMission(Long idMission, MissionRequest request) {
         Mission mission = getMissionById(idMission);
 
         if (mission.getStatut() != StatutMission.PREVUE) {
             throw new BusinessRuleException("Une mission ne peut être modifiée qu'avant validation.");
         }
 
-        long joursAvant = ChronoUnit.DAYS.between(LocalDate.now(), dateDebut);
+        long joursAvant = ChronoUnit.DAYS.between(LocalDate.now(), request.getDateDebut());
         if (joursAvant < 10) {
             throw new DelaiInsuffisantException(
                 "Une mission doit être soumise au moins 10 jours avant la date de début. " +
@@ -147,33 +142,31 @@ public class MissionService {
             );
         }
 
-        if (dateFin.isBefore(dateDebut)) {
+        if (request.getDateFin().isBefore(request.getDateDebut())) {
             throw new BusinessRuleException("La date de fin ne peut pas être avant la date de début.");
         }
 
-        verifierChevauchement(dateDebut, dateFin, idMission);
+        Direction direction = directionRepository.findById(request.getIdDirection())
+            .orElseThrow(() -> new ResourceNotFoundException("Direction introuvable : " + request.getIdDirection()));
 
-        Direction direction = directionRepository.findById(idDirection)
-            .orElseThrow(() -> new ResourceNotFoundException("Direction introuvable : " + idDirection));
-
-        mission.setDateDebut(dateDebut);
-        mission.setDateFin(dateFin);
-        mission.setLieu(lieu);
-        mission.setObjetMission(objetMission);
+        mission.setDateDebut(request.getDateDebut());
+        mission.setDateFin(request.getDateFin());
+        mission.setLieu(request.getLieu());
+        mission.setObjetMission(request.getObjetMission());
         mission.setDirection(direction);
 
+        List<Long> idAgents = request.getIdAgents();
         if (idAgents != null) {
             participeRepository.deleteByMissionIdMission(idMission);
             if (!idAgents.isEmpty()) {
                 List<Participe> participations = new ArrayList<>();
+                List<String> rolesMission = request.getRolesMission();
                 for (int i = 0; i < idAgents.size(); i++) {
                     Long idAgent = idAgents.get(i);
                     Agent agent = agentRepository.findById(idAgent)
                         .orElseThrow(() -> new ResourceNotFoundException("Agent introuvable : " + idAgent));
-
-                        String role = (rolesMission != null && i < rolesMission.size())
+                    String role = (rolesMission != null && i < rolesMission.size())
                             ? rolesMission.get(i) : ROLE_MEMBRE;
-
                     participations.add(Participe.builder()
                             .agent(agent)
                             .mission(mission)
@@ -194,10 +187,9 @@ public class MissionService {
     public Mission validerMission(Long idMission) {
         Mission mission = getMissionById(idMission);
 
-        if (mission.getStatut() != StatutMission.PREVUE &&
-            mission.getStatut() != StatutMission.INITIEE) {
+        if (mission.getStatut() != StatutMission.PREVUE) {
             throw new BusinessRuleException(
-                "Impossible de valider une mission avec le statut : " + mission.getStatut()
+                "Seules les missions au statut PREVUE peuvent être validées. Statut actuel : " + mission.getStatut()
             );
         }
 
@@ -419,8 +411,10 @@ public class MissionService {
         }
         Agent chauffeur = affectation.getChauffeur();
         Vehicule vehicule = affectation.getVehicule();
+        Mission mission = affectation.getMission();
         return new MissionViewDTO.AffectationView(
                 affectation.getIdAffectation(),
+                mission != null ? mission.getIdMission() : null,
                 chauffeur != null ? chauffeur.getIdAgent() : null,
                 chauffeur != null ? chauffeur.getNom() : null,
                 chauffeur != null ? chauffeur.getPrenom() : null,
@@ -429,6 +423,13 @@ public class MissionService {
                 vehicule != null ? vehicule.getMarque() : null,
                 vehicule != null ? vehicule.getModele() : null
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<MissionViewDTO.AffectationView> getAllAffectations() {
+        return affectationRepository.findAll().stream()
+                .map(this::toAffectationView)
+                .toList();
     }
 
     private MissionViewDTO.MissionSummaryView toSummaryView(Mission mission) {

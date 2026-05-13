@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,6 +22,7 @@ public class Affectation {
     // Une affectation concerne une seule mission (OneToOne unique)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_mission", nullable = false, unique = true)
+    @JsonIgnore
     private Mission mission;
 
     // Le chauffeur affecté (Agent avec estChauffeur = true)
@@ -33,7 +35,14 @@ public class Affectation {
     @JoinColumn(name = "id_vehicule", nullable = false)
     private Vehicule vehicule;
 
-    // Date de l'affectation
+    // Date de l'affectation — initialisée automatiquement à la création
     @Column(name = "date_affectation", nullable = false)
     private LocalDate dateAffectation;
+
+    @PrePersist
+    public void prePersist() {
+        if (dateAffectation == null) {
+            dateAffectation = LocalDate.now();
+        }
+    }
 }

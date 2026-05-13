@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.controller;
 
+import com.carfo.gestion_missions.dto.MissionRequest;
 import com.carfo.gestion_missions.dto.MissionViewDTO;
 import com.carfo.gestion_missions.entity.Affectation;
 import com.carfo.gestion_missions.entity.Mission;
@@ -27,7 +28,7 @@ public class MissionController {
 
     // GET /api/missions — toutes les missions
     @GetMapping
-    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
     public ResponseEntity<List<MissionViewDTO.MissionSummaryView>> getAllMissions(
             @RequestParam(required = false) StatutMission statut,
             @RequestParam(required = false) Long idDirection,
@@ -84,8 +85,9 @@ public class MissionController {
     // PATCH /api/missions/{id}/valider
     @PatchMapping("/{id}/valider")
     @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'ADMINISTRATEUR')")
-    public ResponseEntity<Mission> validerMission(@PathVariable Long id) {
-        return ResponseEntity.ok(missionService.validerMission(id));
+    public ResponseEntity<MissionViewDTO.MissionDetailView> validerMission(@PathVariable Long id) {
+        missionService.validerMission(id);
+        return ResponseEntity.ok(missionService.getMissionDetail(id));
     }
 
     // PATCH /api/missions/{id}/annuler
@@ -103,23 +105,11 @@ public class MissionController {
         return ResponseEntity.ok(missionService.cloturerMission(id));
     }
 
-    // PUT /api/missions/{id}
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('DIRECTEUR_DIRECTION', 'DIRECTEUR', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
-    public ResponseEntity<Mission> updateMission(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        LocalDate dateDebut = LocalDate.parse((String) body.get("dateDebut"));
-        LocalDate dateFin   = LocalDate.parse((String) body.get("dateFin"));
-        String lieu         = (String) body.get("lieu");
-        String objet        = (String) body.get("objetMission");
-        Long idDirection    = Long.valueOf(body.get("idDirection").toString());
-
-        @SuppressWarnings("unchecked")
-        List<Long> idAgents = (List<Long>) body.get("idAgents");
-        @SuppressWarnings("unchecked")
-        List<String> roles  = (List<String>) body.get("rolesMission");
-
-        return ResponseEntity.ok(missionService.updateMission(
-                id, dateDebut, dateFin, lieu, objet, idDirection, idAgents, roles));
+    public ResponseEntity<Mission> updateMission(@PathVariable Long id,
+                                                  @RequestBody MissionRequest request) {
+        return ResponseEntity.ok(missionService.updateMission(id, request));
     }
 
     // GET /api/missions/{id}/participants

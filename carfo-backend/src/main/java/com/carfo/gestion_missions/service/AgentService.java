@@ -6,6 +6,8 @@ import com.carfo.gestion_missions.entity.Direction;
 import com.carfo.gestion_missions.enums.RoleAgent;
 import com.carfo.gestion_missions.exception.DuplicateResourceException;
 import com.carfo.gestion_missions.exception.ResourceNotFoundException;
+import com.carfo.gestion_missions.repository.AbsenceRepository;
+import com.carfo.gestion_missions.repository.AffectationRepository;
 import com.carfo.gestion_missions.repository.AgentRepository;
 import com.carfo.gestion_missions.repository.DirectionRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +15,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +27,8 @@ public class AgentService {
 
     private final AgentRepository agentRepository;
     private final DirectionRepository directionRepository;
+    private final AbsenceRepository absenceRepository;
+    private final AffectationRepository affectationRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<Agent> getAllAgents() {
@@ -36,6 +43,26 @@ public class AgentService {
     public List<Agent> getAllChauffeurs() {
         return agentRepository.findAllChauffeurs();
     }
+
+        @Transactional(readOnly = true)
+        public List<Agent> getAgentsDisponibles(LocalDate dateDebut, LocalDate dateFin) {
+        List<Agent> chauffeurs = agentRepository.findAllChauffeurs();
+
+        Set<Long> chauffeursAbsents = chauffeurs.stream()
+            .filter(agent -> !absenceRepository.findAbsencesEnChevauchement(agent.getIdAgent(), dateDebut, dateFin).isEmpty())
+            .map(Agent::getIdAgent)
+            .collect(Collectors.toSet());
+
+        Set<Long> chauffeursDejaAffectes = chauffeurs.stream()
+            .filter(agent -> !affectationRepository.findAffectationsChauffeurEnChevauchement(agent.getIdAgent(), dateDebut, dateFin).isEmpty())
+            .map(Agent::getIdAgent)
+            .collect(Collectors.toSet());
+
+        return chauffeurs.stream()
+            .filter(agent -> !chauffeursAbsents.contains(agent.getIdAgent()))
+            .filter(agent -> !chauffeursDejaAffectes.contains(agent.getIdAgent()))
+            .toList();
+        }
 
     public List<Agent> getAgentsByDirection(Long idDirection) {
         return agentRepository.findByDirectionIdDirectionAndActifTrue(idDirection);

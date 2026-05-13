@@ -20,6 +20,7 @@ public final class MissionViewDTO {
 
     public record AffectationView(
             Long idAffectation,
+            Long idMission,
             Long idChauffeur,
             String nomChauffeur,
             String prenomChauffeur,

@@ -6,6 +6,8 @@ import com.carfo.gestion_missions.dto.AuthDTO.JwtResponse;
 import com.carfo.gestion_missions.dto.AuthDTO.RegisterResponse;
 import com.carfo.gestion_missions.entity.Agent;
 import com.carfo.gestion_missions.entity.Direction;
+import com.carfo.gestion_missions.enums.RoleAgent;
+import com.carfo.gestion_missions.exception.BusinessRuleException;
 import com.carfo.gestion_missions.repository.AgentRepository;
 import com.carfo.gestion_missions.repository.DirectionRepository;
 import com.carfo.gestion_missions.security.JwtUtils;
@@ -13,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +64,10 @@ public class AuthService {
             throw new IllegalArgumentException("Ce matricule est déjà utilisé : " + request.getMatricule());
         }
 
+        if (request.isEstChauffeur() && !isCurrentUserDmg()) {
+            throw new BusinessRuleException("Seul le DMG peut créer un chauffeur.");
+        }
+
         Long idDirection = Objects.requireNonNull(request.getIdDirection(), "idDirection est obligatoire");
 
         Direction direction = directionRepository.findById(idDirection)
@@ -102,6 +110,17 @@ public class AuthService {
             .nomDirection(saved.getDirection().getNomDirection())
             .username(saved.getUsername())
             .build();
+    }
+
+    private boolean isCurrentUserDmg() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> authority.equals("ROLE_" + RoleAgent.DIRECTEUR_DIRECTION.name()));
     }
 
     // Génère le username : 1ère lettre du NOM + PRENOM complet

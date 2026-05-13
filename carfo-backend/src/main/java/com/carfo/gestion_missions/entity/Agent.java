@@ -1,6 +1,8 @@
 package com.carfo.gestion_missions.entity;
 
 import com.carfo.gestion_missions.enums.RoleAgent;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -16,6 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @SuppressWarnings("java:S1948")
 public class Agent implements UserDetails {
 
@@ -70,14 +73,17 @@ public class Agent implements UserDetails {
 
     // Participation aux missions (table Participe)
     @OneToMany(mappedBy = "agent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Participe> participations;
 
     // Absences
     @OneToMany(mappedBy = "agent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Absence> absences;
 
     // Affectations en tant que chauffeur
     @OneToMany(mappedBy = "chauffeur", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Affectation> affectations;
 
     // ============================================================

@@ -1,6 +1,7 @@
 package com.carfo.gestion_missions.entity;
 
 import com.carfo.gestion_missions.enums.StatutMission;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -51,10 +52,12 @@ public class Mission {
 
     // Liste des participants (table Participe)
     @OneToMany(mappedBy = "mission", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Participe> participants;
 
     // Affectation chauffeur + véhicule
     @OneToOne(mappedBy = "mission", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private Affectation affectation;
 
     // Calcul automatique : la mission doit être soumise 10 jours avant

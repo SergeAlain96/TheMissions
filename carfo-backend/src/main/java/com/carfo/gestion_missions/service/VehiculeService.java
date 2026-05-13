@@ -39,6 +39,11 @@ public class VehiculeService {
         return vehiculeRepository.findByStatutAndActifTrue(StatutVehicule.DISPONIBLE);
     }
 
+    @Transactional(readOnly = true)
+    public List<Vehicule> getVehiculesDisponiblesSurPeriode(LocalDate dateDebut, LocalDate dateFin) {
+        return vehiculeRepository.findVehiculesDisponiblesSurPeriode(dateDebut, dateFin);
+    }
+
     public Vehicule createVehicule(String immatriculation,
                                    String marque,
                                    String modele,

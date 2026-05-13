@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\PC\\\\Desktop\\\\STAGE-CARFO\\\\TheMissions\" -Force)",
+      "PowerShell(ls -Path \"c:\\\\Users\\\\PC\\\\Desktop\\\\STAGE-CARFO\\\\TheMissions\\\\carfo-frontend\\\\node_modules\" -ErrorAction SilentlyContinue | Select-Object -First 1; if \\(-not \\(Test-Path \"c:\\\\Users\\\\PC\\\\Desktop\\\\STAGE-CARFO\\\\TheMissions\\\\carfo-frontend\\\\node_modules\"\\)\\) { Write-Host \"node_modules n'existe pas\" })",
+      "PowerShell(mvn -f carfo-backend/pom.xml spring-boot:run \"-Dspring-boot.run.profiles=dev-noauth\")",
+      "Read(//c/Users/PC/AppData/Local/Temp/claude/c--Users-PC-Desktop-STAGE-CARFO-TheMissions/71856eee-f6ad-4c3f-98a2-93a4fcb3137c/tasks/**)",
+      "PowerShell($b = try { \\(Invoke-WebRequest -Uri http://localhost:8000/api/missions -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"FAIL: $\\($_.Exception.Message\\)\" }; $a = try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/affectations\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"FAIL: $\\($_.Exception.Message\\)\" }; $v = try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/vehicules/disponibles?dateDebut=2026-06-01&dateFin=2026-06-05\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"FAIL: $\\($_.Exception.Message\\)\" }; $f = try { \\(Invoke-WebRequest -Uri http://localhost:4300 -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"FAIL: $\\($_.Exception.Message\\)\" }; \"GET /api/missions          -> $b\"; \"GET /api/affectations      -> $a\"; \"GET /api/vehicules/dispo   -> $v\"; \"GET http://localhost:4300  -> $f\")",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri http://localhost:8000/api/missions -UseBasicParsing -TimeoutSec 5; \"Backend UP - status: $\\($r.StatusCode\\)\" } catch { \"Backend DOWN - $\\($_.Exception.Message\\)\" })"
+    ]
+  }
+}

@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -25,7 +26,7 @@ public class AgentController {
         return ResponseEntity.ok(agentService.getAllAgents());
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
     public ResponseEntity<Agent> getAgentById(@PathVariable Long id) {
         return ResponseEntity.ok(agentService.getAgentById(id));
@@ -37,7 +38,14 @@ public class AgentController {
         return ResponseEntity.ok(agentService.getAllChauffeurs());
     }
 
-    @GetMapping("/direction/{idDirection}")
+    @GetMapping("/disponibles")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    public ResponseEntity<List<Agent>> getAgentsDisponibles(@RequestParam LocalDate dateDebut,
+                                                            @RequestParam LocalDate dateFin) {
+        return ResponseEntity.ok(agentService.getAgentsDisponibles(dateDebut, dateFin));
+    }
+
+    @GetMapping("/direction/{idDirection:\\d+}")
     @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
     public ResponseEntity<List<Agent>> getAgentsByDirection(@PathVariable Long idDirection) {
         return ResponseEntity.ok(agentService.getAgentsByDirection(idDirection));
