@@ -10,4 +10,7 @@ import java.util.Optional;
 public interface DirectionRepository extends JpaRepository<Direction, Long> {
     Optional<Direction> findByNomDirection(String nomDirection);
     boolean existsByNomDirection(String nomDirection);
+
+    Optional<Direction> findBySigleDirectionIgnoreCase(String sigleDirection);
+    boolean existsBySigleDirection(String sigleDirection);
 }

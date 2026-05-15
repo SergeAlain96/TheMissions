@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.service;
 
+import com.carfo.gestion_missions.config.DataInitializer;
 import com.carfo.gestion_missions.dto.AuthDTO.LoginRequest;
 import com.carfo.gestion_missions.dto.AuthDTO.RegisterRequest;
 import com.carfo.gestion_missions.dto.AuthDTO.JwtResponse;
@@ -15,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -112,15 +112,28 @@ public class AuthService {
             .build();
     }
 
+    /**
+     * Le DMG est le DIRECTEUR_DIRECTION de la Direction du Matériel Général (sigle "DMG").
+     * Tout autre directeur de direction n'est PAS le DMG, même s'il a le rôle DIRECTEUR_DIRECTION.
+     */
     private boolean isCurrentUserDmg() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
         }
 
-        return authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(authority -> authority.equals("ROLE_" + RoleAgent.DIRECTEUR_DIRECTION.name()));
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof Agent agent)) {
+            return false;
+        }
+
+        if (agent.getRole() != RoleAgent.DIRECTEUR_DIRECTION) {
+            return false;
+        }
+
+        Direction direction = agent.getDirection();
+        return direction != null
+                && DataInitializer.SIGLE_DMG.equalsIgnoreCase(direction.getSigleDirection());
     }
 
     // Génère le username : 1ère lettre du NOM + PRENOM complet

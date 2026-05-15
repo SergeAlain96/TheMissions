@@ -25,7 +25,7 @@ public class DashboardController {
      * Récupère les statistiques de l'année courante
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE', 'DIRECTEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
     public ResponseEntity<Map<String, Object>> getAnnualStats() {
         Map<String, Object> stats = dashboardService.getAnnualStats();
         return ResponseEntity.ok(stats);
@@ -35,7 +35,7 @@ public class DashboardController {
      * Récupère les statistiques filtrées par année
      */
     @GetMapping("/stats/year")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE', 'DIRECTEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
     public ResponseEntity<Map<String, Object>> getStatsByYear(@RequestParam(required = false) Integer annee) {
         Map<String, Object> stats = dashboardService.getStatsByYear(annee);
         return ResponseEntity.ok(stats);
@@ -45,7 +45,7 @@ public class DashboardController {
      * Récupère les missions à venir (7 prochains jours)
      */
     @GetMapping("/missions-en-cours")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE', 'DIRECTEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
     public ResponseEntity<Map<String, Object>> getUpcomingMissions() {
         Map<String, Object> missions = dashboardService.getUpcomingMissions();
         return ResponseEntity.ok(missions);
