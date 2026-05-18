@@ -113,7 +113,7 @@ public class AuthService {
     }
 
     /**
-     * Le DMG est le DIRECTEUR_DIRECTION de la Direction du Matériel Général (sigle "DMG").
+     * Le DMG est le DIRECTEUR_DIRECTION de la Direction des Moyens Généraux (sigle "DMG").
      * Tout autre directeur de direction n'est PAS le DMG, même s'il a le rôle DIRECTEUR_DIRECTION.
      */
     private boolean isCurrentUserDmg() {

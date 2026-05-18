@@ -20,16 +20,23 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class VehiculeController {
 
+    /** Profils autorisés à consulter le parc auto (lecture seule). */
+    private static final String READ_ROLES =
+            "hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')";
+
+    /** Mutations sur le parc auto : réservées au DMG (Directeur des Moyens Généraux) ou Admin. */
+    private static final String WRITE_DMG = "@securityChecker.isDmgOrAdmin()";
+
     private final VehiculeService vehiculeService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Vehicule>> getAllVehicules() {
         return ResponseEntity.ok(vehiculeService.getAllVehicules());
     }
 
     @GetMapping("/disponibles")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Vehicule>> getVehiculesDisponibles(
             @RequestParam(required = false) LocalDate dateDebut,
             @RequestParam(required = false) LocalDate dateFin) {
@@ -40,13 +47,13 @@ public class VehiculeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<Vehicule> getVehiculeById(@PathVariable Long id) {
         return ResponseEntity.ok(vehiculeService.getVehiculeById(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_DMG)
     public ResponseEntity<Vehicule> createVehicule(@Valid @RequestBody VehiculeRequest request) {
         Vehicule vehicule = vehiculeService.createVehicule(
                 request.getImmatriculation(), request.getMarque(), request.getModele(),
@@ -55,7 +62,7 @@ public class VehiculeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_DMG)
     public ResponseEntity<Vehicule> updateVehicule(@PathVariable Long id,
                                                     @Valid @RequestBody VehiculeRequest request) {
         return ResponseEntity.ok(vehiculeService.updateVehicule(
@@ -64,19 +71,19 @@ public class VehiculeController {
     }
 
     @PatchMapping("/{id}/statut")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_DMG)
     public ResponseEntity<Vehicule> updateStatut(@PathVariable Long id, @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(vehiculeService.updateStatut(id, StatutVehicule.valueOf(body.get("statut"))));
     }
 
     @PatchMapping("/{id}/maintenance")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_DMG)
     public ResponseEntity<Vehicule> mettreEnMaintenance(@PathVariable Long id) {
         return ResponseEntity.ok(vehiculeService.updateStatut(id, StatutVehicule.EN_MAINTENANCE));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_DMG)
     public ResponseEntity<Void> deleteVehicule(@PathVariable Long id) {
         vehiculeService.deleteVehicule(id);
         return ResponseEntity.noContent().build();

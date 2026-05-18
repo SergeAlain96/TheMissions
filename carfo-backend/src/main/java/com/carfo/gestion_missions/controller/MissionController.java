@@ -61,24 +61,17 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getMissionsByDirection(idDirection));
     }
 
-    // POST /api/missions/soumettre — soumettre une nouvelle mission
     @PostMapping("/soumettre")
     @PreAuthorize("hasAnyRole('DIRECTEUR_DIRECTION', 'DIRECTEUR', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
-    public ResponseEntity<Mission> soumettreMission(@RequestBody Map<String, Object> body) {
-        LocalDate dateDebut = LocalDate.parse((String) body.get("dateDebut"));
-        LocalDate dateFin   = LocalDate.parse((String) body.get("dateFin"));
-        String lieu         = (String) body.get("lieu");
-        String objet        = (String) body.get("objetMission");
-        Long idDirection    = Long.valueOf(body.get("idDirection").toString());
-
-        @SuppressWarnings("unchecked")
-        List<Long> idAgents = (List<Long>) body.get("idAgents");
-        @SuppressWarnings("unchecked")
-        List<String> roles  = (List<String>) body.get("rolesMission");
-
+    public ResponseEntity<Mission> soumettreMission(@RequestBody MissionRequest request) {
         Mission mission = missionService.soumettreMission(
-                dateDebut, dateFin, lieu, objet, idDirection, idAgents, roles);
-
+                request.getDateDebut(),
+                request.getDateFin(),
+                request.getLieu(),
+                request.getObjetMission(),
+                request.getIdDirection(),
+                request.getIdAgents(),
+                request.getRolesMission());
         return ResponseEntity.status(HttpStatus.CREATED).body(mission);
     }
 
@@ -123,11 +116,24 @@ public class MissionController {
     @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
     public ResponseEntity<List<MissionViewDTO.ParticipantView>> addParticipants(@PathVariable Long id,
                                                                                 @RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        List<Long> idAgents = (List<Long>) body.get("idAgents");
+        List<Long> idAgents = toLongList(body.get("idAgents"));
         @SuppressWarnings("unchecked")
         List<String> roles  = (List<String>) body.get("rolesMission");
         return ResponseEntity.ok(missionService.addParticipants(id, idAgents, roles));
+    }
+
+    /**
+     * Convertit une liste hétérogène (Integer/Long/String) en List&lt;Long&gt; sans crash de cast.
+     * Jackson désérialise les petits entiers JSON en Integer par défaut.
+     */
+    private static List<Long> toLongList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(o -> Long.valueOf(o.toString()))
+                .toList();
     }
 
     // DELETE /api/missions/{id}/participants/{idAgent}
@@ -140,7 +146,7 @@ public class MissionController {
 
     // GET /api/missions/{id}/fiche
     @GetMapping(value = "/{id}/fiche", produces = MediaType.APPLICATION_PDF_VALUE)
-    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
     public ResponseEntity<byte[]> telechargerFiche(@PathVariable Long id) {
         byte[] pdf = ficheMissionService.genererFiche(id);
         return ResponseEntity.ok()
@@ -149,9 +155,9 @@ public class MissionController {
                 .body(pdf);
     }
 
-    // POST /api/missions/{id}/affecter — affecter chauffeur + véhicule
+    // POST /api/missions/{id}/affecter — affectation chauffeur + véhicule (DMG uniquement)
     @PostMapping("/{id}/affecter")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Affectation> affecter(@PathVariable Long id,
                                                  @RequestBody Map<String, Object> body) {
         Long idChauffeur = Long.valueOf(body.get("idChauffeur").toString());
@@ -159,9 +165,9 @@ public class MissionController {
         return ResponseEntity.ok(missionService.affecterRessources(id, idChauffeur, idVehicule));
     }
 
-    // DELETE /api/missions/{id}/affectation
+    // DELETE /api/missions/{id}/affectation (DMG uniquement)
     @DeleteMapping("/{id}/affectation")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Void> removeAffectation(@PathVariable Long id) {
         missionService.removeAffectation(id);
         return ResponseEntity.noContent().build();

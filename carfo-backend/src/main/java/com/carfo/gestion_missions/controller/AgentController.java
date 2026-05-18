@@ -18,38 +18,44 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AgentController {
 
+    /** Profils autorisés à consulter l'annuaire des agents. */
+    private static final String READ_ROLES =
+            "hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')";
+
     private final AgentService agentService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Agent>> getAllAgents() {
         return ResponseEntity.ok(agentService.getAllAgents());
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<Agent> getAgentById(@PathVariable Long id) {
         return ResponseEntity.ok(agentService.getAgentById(id));
     }
 
     @GetMapping("/chauffeurs")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Agent>> getAllChauffeurs() {
         return ResponseEntity.ok(agentService.getAllChauffeurs());
     }
 
     @GetMapping("/disponibles")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE', 'DIRECTEUR_DIRECTION')")
     public ResponseEntity<List<Agent>> getAgentsDisponibles(@RequestParam LocalDate dateDebut,
                                                             @RequestParam LocalDate dateFin) {
         return ResponseEntity.ok(agentService.getAgentsDisponibles(dateDebut, dateFin));
     }
 
     @GetMapping("/direction/{idDirection:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'CHARGE_ETUDE')")
+    @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Agent>> getAgentsByDirection(@PathVariable Long idDirection) {
         return ResponseEntity.ok(agentService.getAgentsByDirection(idDirection));
     }
+
+    // ---- Mutations restreintes à l'administrateur ----
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
