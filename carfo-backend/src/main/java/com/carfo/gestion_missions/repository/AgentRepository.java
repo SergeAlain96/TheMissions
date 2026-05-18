@@ -1,6 +1,7 @@
 package com.carfo.gestion_missions.repository;
 
 import com.carfo.gestion_missions.entity.Agent;
+import com.carfo.gestion_missions.enums.RoleAgent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -32,6 +33,27 @@ public interface AgentRepository extends JpaRepository<Agent, Long> {
 
     // Agents d'une direction
     List<Agent> findByDirectionIdDirectionAndActifTrue(Long idDirection);
+
+    // Tous les agents actifs ayant un rôle donné (utilisé pour diffuser les notifications)
+    List<Agent> findByRoleAndActifTrue(RoleAgent role);
+
+    // Le DMG : DIRECTEUR_DIRECTION rattaché à la direction de sigle DMG
+    @Query("""
+        SELECT a FROM Agent a
+        WHERE a.actif = true
+        AND a.role = com.carfo.gestion_missions.enums.RoleAgent.DIRECTEUR_DIRECTION
+        AND UPPER(a.direction.sigleDirection) = 'DMG'
+    """)
+    List<Agent> findDmgAgents();
+
+    // Le ou les directeurs d'une direction donnée (par sigle)
+    @Query("""
+        SELECT a FROM Agent a
+        WHERE a.actif = true
+        AND a.role = com.carfo.gestion_missions.enums.RoleAgent.DIRECTEUR_DIRECTION
+        AND UPPER(a.direction.sigleDirection) = UPPER(:sigle)
+    """)
+    List<Agent> findDirecteursParSigleDirection(@org.springframework.data.repository.query.Param("sigle") String sigle);
 
     // Compter agents actifs
     long countByActif(boolean actif);

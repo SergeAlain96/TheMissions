@@ -3,6 +3,8 @@ package com.carfo.gestion_missions.service;
 import com.carfo.gestion_missions.dto.MissionRequest;
 import com.carfo.gestion_missions.dto.MissionViewDTO;
 import com.carfo.gestion_missions.entity.*;
+import com.carfo.gestion_missions.enums.NotificationType;
+import com.carfo.gestion_missions.enums.RoleAgent;
 import com.carfo.gestion_missions.enums.StatutMission;
 import com.carfo.gestion_missions.enums.StatutVehicule;
 import com.carfo.gestion_missions.exception.*;
@@ -33,6 +35,7 @@ public class MissionService {
     private final AbsenceRepository absenceRepository;
     private final AffectationRepository affectationRepository;
     private final VehiculeRepository vehiculeRepository;
+    private final NotificationService notificationService;
 
     // ============================================================
     // SOUMETTRE UNE MISSION (règle des 10 jours)
@@ -91,6 +94,17 @@ public class MissionService {
             }
             participeRepository.saveAll(participations);
         }
+
+        // Notif : prévenir toutes les Secrétaires Générales d'une nouvelle mission à valider
+        List<Agent> sgs = agentRepository.findByRoleAndActifTrue(RoleAgent.SECRETAIRE_GENERALE);
+        notificationService.notifierTous(
+                sgs,
+                NotificationType.MISSION_SOUMISE,
+                "Nouvelle mission à valider",
+                String.format("La %s a soumis : %s (%s → %s)",
+                        direction.getSigleDirection(), objetMission, dateDebut, dateFin),
+                mission.getIdMission()
+        );
 
         return mission;
     }
@@ -194,7 +208,31 @@ public class MissionService {
         }
 
         mission.setStatut(StatutMission.INITIEE);
-        return missionRepository.save(mission);
+        Mission saved = missionRepository.save(mission);
+
+        // Notif : prévenir le DMG qu'une affectation est à faire
+        List<Agent> dmgs = agentRepository.findDmgAgents();
+        notificationService.notifierTous(
+                dmgs,
+                NotificationType.MISSION_VALIDEE,
+                "Mission validée — affectation à faire",
+                String.format("« %s » (%s → %s) est validée et attend un chauffeur + véhicule.",
+                        mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
+                idMission
+        );
+        // Notif : prévenir les directeurs de la direction émettrice
+        if (mission.getDirection() != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
+                    mission.getDirection().getSigleDirection());
+            notificationService.notifierTous(
+                    directeurs,
+                    NotificationType.MISSION_VALIDEE,
+                    "Votre mission est validée",
+                    String.format("« %s » a été approuvée par la Secrétaire Générale.", mission.getObjetMission()),
+                    idMission
+            );
+        }
+        return saved;
     }
 
     // ============================================================
@@ -210,7 +248,22 @@ public class MissionService {
 
         mission.setStatut(StatutMission.ANNULEE);
         mission.setMotifAnnulation(motif);
-        return missionRepository.save(mission);
+        Mission saved = missionRepository.save(mission);
+
+        // Notif : prévenir les directeurs de la direction émettrice
+        if (mission.getDirection() != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
+                    mission.getDirection().getSigleDirection());
+            notificationService.notifierTous(
+                    directeurs,
+                    NotificationType.MISSION_ANNULEE,
+                    "Mission annulée",
+                    String.format("« %s » a été annulée. Motif : %s",
+                            mission.getObjetMission(), motif != null ? motif : "non précisé"),
+                    idMission
+            );
+        }
+        return saved;
     }
 
     // ============================================================
@@ -235,7 +288,19 @@ public class MissionService {
             vehiculeRepository.save(vehicule);
         }
 
-        return missionRepository.save(mission);
+        Mission saved = missionRepository.save(mission);
+
+        // Notif : DRH (la mission clôturée passe au traitement RH)
+        List<Agent> drhs = agentRepository.findDirecteursParSigleDirection("DRH");
+        notificationService.notifierTous(
+                drhs,
+                NotificationType.MISSION_CLOTUREE,
+                "Mission clôturée — traitement RH",
+                String.format("« %s » (%s → %s) est clôturée. Fiche disponible pour la DRH.",
+                        mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
+                idMission
+        );
+        return saved;
     }
 
     // ============================================================
@@ -284,7 +349,36 @@ public class MissionService {
         vehicule.setStatut(StatutVehicule.EN_MISSION);
         vehiculeRepository.save(vehicule);
 
-        return affectationRepository.save(affectation);
+        Affectation saved = affectationRepository.save(affectation);
+
+        // Notif : prévenir le chauffeur
+        notificationService.notifier(
+                chauffeur,
+                NotificationType.AFFECTATION_CREEE,
+                "Vous avez été affecté à une mission",
+                String.format("« %s » du %s au %s — véhicule %s %s (%s).",
+                        mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin(),
+                        vehicule.getMarque(), vehicule.getModele(), vehicule.getImmatriculation()),
+                idMission
+        );
+
+        // Notif : prévenir les directeurs de la direction émettrice
+        if (mission.getDirection() != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
+                    mission.getDirection().getSigleDirection());
+            notificationService.notifierTous(
+                    directeurs,
+                    NotificationType.AFFECTATION_CREEE,
+                    "Mission affectée",
+                    String.format("« %s » : chauffeur %s %s, véhicule %s %s.",
+                            mission.getObjetMission(),
+                            chauffeur.getPrenom(), chauffeur.getNom(),
+                            vehicule.getMarque(), vehicule.getModele()),
+                    idMission
+            );
+        }
+
+        return saved;
     }
 
     @Transactional(readOnly = true)

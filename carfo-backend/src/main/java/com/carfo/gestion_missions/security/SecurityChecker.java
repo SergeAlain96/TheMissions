@@ -9,6 +9,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * Bean exposé pour les expressions @PreAuthorize.
  *
@@ -51,5 +53,17 @@ public class SecurityChecker {
     /** DMG OU administrateur — pour les opérations d'affectation de ressources. */
     public boolean isDmgOrAdmin() {
         return isAdmin() || isDmg();
+    }
+
+    /** Retourne l'agent connecté si présent dans le contexte de sécurité. */
+    public Optional<Agent> getCurrentAgent() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return Optional.empty();
+        }
+        if (auth.getPrincipal() instanceof Agent agent) {
+            return Optional.of(agent);
+        }
+        return Optional.empty();
     }
 }
