@@ -55,16 +55,16 @@ public class AgentController {
         return ResponseEntity.ok(agentService.getAgentsByDirection(idDirection));
     }
 
-    // ---- Mutations restreintes à l'administrateur ----
+    // ---- Mutations : DMG (gère le personnel terrain dont les chauffeurs) + Admin (DSI) ----
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Agent> updateAgent(@PathVariable Long id, @Valid @RequestBody UpdateRequest request) {
         return ResponseEntity.ok(agentService.updateAgent(id, request));
     }
 
     @PatchMapping("/{id}/desactiver")
-    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Void> deactivateAgent(@PathVariable Long id) {
         agentService.deactivateAgent(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();

@@ -57,5 +57,5 @@ public interface AffectationRepository extends JpaRepository<Affectation, Long> 
         ORDER BY COUNT(a) DESC
         LIMIT 1
     """)
-    List<Object> findMostUsedChauffeur();
+    List<Object[]> findMostUsedChauffeur();
 }

@@ -334,6 +334,18 @@ public class MissionService {
             );
         }
 
+        // Capture des données dont on aura besoin pour les notifications, avant tout flush Hibernate.
+        // Cela évite des lazy-loads après la perte éventuelle de session (LazyInitializationException).
+        String objetMission   = mission.getObjetMission();
+        LocalDate dateDebut   = mission.getDateDebut();
+        LocalDate dateFin     = mission.getDateFin();
+        String sigleDirection = mission.getDirection() != null ? mission.getDirection().getSigleDirection() : null;
+        String prenomChauffeur = chauffeur.getPrenom();
+        String nomChauffeur    = chauffeur.getNom();
+        String marque         = vehicule.getMarque();
+        String modele         = vehicule.getModele();
+        String immat          = vehicule.getImmatriculation();
+
         // Supprimer l'ancienne affectation si elle existe
         affectationRepository.findByMissionIdMission(idMission)
                 .ifPresent(affectationRepository::delete);
@@ -357,23 +369,19 @@ public class MissionService {
                 NotificationType.AFFECTATION_CREEE,
                 "Vous avez été affecté à une mission",
                 String.format("« %s » du %s au %s — véhicule %s %s (%s).",
-                        mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin(),
-                        vehicule.getMarque(), vehicule.getModele(), vehicule.getImmatriculation()),
+                        objetMission, dateDebut, dateFin, marque, modele, immat),
                 idMission
         );
 
         // Notif : prévenir les directeurs de la direction émettrice
-        if (mission.getDirection() != null) {
-            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
-                    mission.getDirection().getSigleDirection());
+        if (sigleDirection != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(sigleDirection);
             notificationService.notifierTous(
                     directeurs,
                     NotificationType.AFFECTATION_CREEE,
                     "Mission affectée",
                     String.format("« %s » : chauffeur %s %s, véhicule %s %s.",
-                            mission.getObjetMission(),
-                            chauffeur.getPrenom(), chauffeur.getNom(),
-                            vehicule.getMarque(), vehicule.getModele()),
+                            objetMission, prenomChauffeur, nomChauffeur, marque, modele),
                     idMission
             );
         }

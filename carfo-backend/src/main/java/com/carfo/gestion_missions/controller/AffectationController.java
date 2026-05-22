@@ -22,6 +22,12 @@ public class AffectationController {
 
     private final MissionService missionService;
 
+    @GetMapping
+    @PreAuthorize(READ_ROLES)
+    public ResponseEntity<List<MissionViewDTO.AffectationView>> getAllAffectations() {
+        return ResponseEntity.ok(missionService.getAllAffectations());
+    }
+
     @GetMapping("/chauffeur/{id}")
     @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<MissionViewDTO.AffectationView>> getAffectationsByChauffeur(@PathVariable Long id) {
@@ -40,11 +46,12 @@ public class AffectationController {
 
     @PostMapping
     @PreAuthorize("@securityChecker.isDmgOrAdmin()")
-    public ResponseEntity<Affectation> createAffectation(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<MissionViewDTO.AffectationView> createAffectation(@RequestBody Map<String, Object> body) {
         Long idMission   = Long.valueOf(body.get("idMission").toString());
         Long idChauffeur = Long.valueOf(body.get("idChauffeur").toString());
         Long idVehicule  = Long.valueOf(body.get("idVehicule").toString());
-        return ResponseEntity.ok(missionService.affecterRessources(idMission, idChauffeur, idVehicule));
+        missionService.affecterRessources(idMission, idChauffeur, idVehicule);
+        return ResponseEntity.ok(missionService.getMissionDetail(idMission).affectation());
     }
 
     @DeleteMapping("/mission/{id}")

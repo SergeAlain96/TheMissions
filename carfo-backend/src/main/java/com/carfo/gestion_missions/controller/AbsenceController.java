@@ -22,6 +22,13 @@ import com.carfo.gestion_missions.service.AbsenceService;
 @RequestMapping("/api/absences")
 public class AbsenceController {
 
+    /** Lecture des absences : tous les profils décisionnels. */
+    private static final String READ_ROLES =
+            "hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')";
+
+    /** Mutations sur les absences : Chargé d'étude + Administrateur. */
+    private static final String WRITE_ROLES = "hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')";
+
     private final AbsenceService absenceService;
 
     public AbsenceController(AbsenceService absenceService) {
@@ -29,46 +36,47 @@ public class AbsenceController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(READ_ROLES)
     public List<Absence> getAll() {
         return absenceService.findAll();
     }
 
     @GetMapping("/agent/{agentId}")
+    @PreAuthorize(READ_ROLES)
     public List<Absence> getByAgent(@PathVariable Long agentId) {
         return absenceService.findByAgentId(agentId);
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_ROLES)
     public ResponseEntity<Absence> create(@RequestBody Absence absence) {
         Absence saved = absenceService.save(absence);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_ROLES)
     public ResponseEntity<Absence> update(@PathVariable Long id, @RequestBody Absence absence) {
         Absence updated = absenceService.update(id, absence);
         return ResponseEntity.ok(updated);
     }
 
     @PatchMapping("/{id}/approuver")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_ROLES)
     public ResponseEntity<Absence> approve(@PathVariable Long id) {
         Absence a = absenceService.approve(id);
         return ResponseEntity.ok(a);
     }
 
     @PatchMapping("/{id}/rejeter")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_ROLES)
     public ResponseEntity<Absence> reject(@PathVariable Long id) {
         Absence a = absenceService.reject(id);
         return ResponseEntity.ok(a);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CHARGE_ETUDE','ADMINISTRATEUR')")
+    @PreAuthorize(WRITE_ROLES)
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         absenceService.delete(id);
         return ResponseEntity.noContent().build();

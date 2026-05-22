@@ -42,5 +42,5 @@ public interface VehiculeRepository extends JpaRepository<Vehicule, Long> {
         ORDER BY COUNT(a) DESC
         LIMIT 1
     """)
-    List<Object> findMostUsedVehicle();
+    List<Object[]> findMostUsedVehicle();
 }

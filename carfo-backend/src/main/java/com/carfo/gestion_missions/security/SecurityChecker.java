@@ -2,8 +2,9 @@ package com.carfo.gestion_missions.security;
 
 import com.carfo.gestion_missions.config.DataInitializer;
 import com.carfo.gestion_missions.entity.Agent;
-import com.carfo.gestion_missions.entity.Direction;
 import com.carfo.gestion_missions.enums.RoleAgent;
+import com.carfo.gestion_missions.repository.AgentRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,11 +19,18 @@ import java.util.Optional;
  *   {@code @PreAuthorize("@securityChecker.isDmgOrAdmin()")}
  */
 @Component("securityChecker")
+@RequiredArgsConstructor
 public class SecurityChecker {
 
     private static final String ROLE_ADMIN = "ROLE_" + RoleAgent.ADMINISTRATEUR.name();
 
-    /** L'utilisateur connecté est-il le DMG (Directeur des Moyens Généraux) ? */
+    private final AgentRepository agentRepository;
+
+    /**
+     * L'utilisateur connecté est-il le DMG (Directeur des Moyens Généraux) ?
+     * On recharge l'agent depuis le repo pour éviter le LazyInitializationException
+     * que provoquerait l'accès à {@code agent.getDirection()} sur le principal détaché.
+     */
     public boolean isDmg() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -34,9 +42,11 @@ public class SecurityChecker {
         if (agent.getRole() != RoleAgent.DIRECTEUR_DIRECTION) {
             return false;
         }
-        Direction direction = agent.getDirection();
-        return direction != null
-                && DataInitializer.SIGLE_DMG.equalsIgnoreCase(direction.getSigleDirection());
+        // Re-fetch dans une session active pour éviter le proxy detaché
+        return agentRepository.findById(agent.getIdAgent())
+                .map(fresh -> fresh.getDirection() != null
+                        && DataInitializer.SIGLE_DMG.equalsIgnoreCase(fresh.getDirection().getSigleDirection()))
+                .orElse(false);
     }
 
     /** L'utilisateur est-il administrateur ? */

@@ -72,24 +72,28 @@ public class DashboardService {
         // Missions par direction (top 5)
         stats.put("missionsByDirection", missionRepository.countMissionsByDirectionTop5());
 
-        // Chauffeur le plus sollicité
-        var topChauffeur = affectationRepository.findMostUsedChauffeur();
-        if (topChauffeur != null && !topChauffeur.isEmpty()) {
-            Map<String, Object> chauffeurInfo = new HashMap<>();
-            chauffeurInfo.put("nom", topChauffeur.get(0).toString());
-            chauffeurInfo.put("nombreMissions", topChauffeur.get(1));
-            stats.put("topChauffeur", chauffeurInfo);
-            log.debug("Top driver: {}", chauffeurInfo);
+        // Chauffeur le plus sollicité — la requête renvoie [nom, count]
+        var topChauffeurResult = affectationRepository.findMostUsedChauffeur();
+        if (topChauffeurResult != null && !topChauffeurResult.isEmpty()) {
+            Object[] row = topChauffeurResult.get(0);
+            if (row != null && row.length >= 2) {
+                Map<String, Object> chauffeurInfo = new HashMap<>();
+                chauffeurInfo.put("nom", String.valueOf(row[0]));
+                chauffeurInfo.put("nombreMissions", row[1]);
+                stats.put("topChauffeur", chauffeurInfo);
+            }
         }
 
-        // Véhicule le plus utilisé
-        var topVehicule = vehiculeRepository.findMostUsedVehicle();
-        if (topVehicule != null && !topVehicule.isEmpty()) {
-            Map<String, Object> vehiculeInfo = new HashMap<>();
-            vehiculeInfo.put("immatriculation", topVehicule.get(0).toString());
-            vehiculeInfo.put("nombreMissions", topVehicule.get(1));
-            stats.put("topVehicule", vehiculeInfo);
-            log.debug("Top vehicle: {}", vehiculeInfo);
+        // Véhicule le plus utilisé — la requête renvoie [immatriculation, count]
+        var topVehiculeResult = vehiculeRepository.findMostUsedVehicle();
+        if (topVehiculeResult != null && !topVehiculeResult.isEmpty()) {
+            Object[] row = topVehiculeResult.get(0);
+            if (row != null && row.length >= 2) {
+                Map<String, Object> vehiculeInfo = new HashMap<>();
+                vehiculeInfo.put("immatriculation", String.valueOf(row[0]));
+                vehiculeInfo.put("nombreMissions", row[1]);
+                stats.put("topVehicule", vehiculeInfo);
+            }
         }
 
         // Agents actifs

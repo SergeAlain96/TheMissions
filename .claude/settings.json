@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-NetTCPConnection -State Listen -LocalPort 8000,4200 -ErrorAction SilentlyContinue)",
+      "PowerShell($ports = @\\(8000, 4200\\); foreach \\($p in $ports\\) { $c = Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue; if \\($c\\) { Write-Host \"Port $p : UTILISE \\(PID $\\($c.OwningProcess\\)\\)\" } else { Write-Host \"Port $p : libre\" } })",
+      "PowerShell(\\(Get-Command mvn -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell($proc = Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue; if \\($proc\\) { Stop-Process -Id $proc.OwningProcess -Force; Write-Host \"Backend PID $\\($proc.OwningProcess\\) arrete\" } else { Write-Host \"Port 8000 deja libre\" })",
+      "PowerShell($proc = Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue; if \\($proc\\) { Write-Host \"Backend READY sur 8000 \\(PID $\\($proc.OwningProcess\\)\\)\" } else { Write-Host \"Pas encore demarre\" })",
+      "PowerShell($body = @{email='dmg@carfo.bf';motDePasse='carfo123'} | ConvertTo-Json; $login = Invoke-RestMethod -Uri \"http://localhost:8000/api/auth/login\" -Method POST -Body $body -ContentType \"application/json\"; $h = @{Authorization = \"Bearer $\\($login.token\\)\"; 'Content-Type'='application/json'}; \"--- Mission #10 details ---\"; $m = Invoke-RestMethod -Uri \"http://localhost:8000/api/missions/10\" -Headers $h -TimeoutSec 5; \"  statut: $\\($m.statut\\), période: $\\($m.dateDebut\\) -> $\\($m.dateFin\\), affectation: $\\($m.affectation -ne $null\\)\"; \"\"; \"--- Test affectation DMG sur mission #10 ---\"; $a = @{idMission=10;idChauffeur=10;idVehicule=1} | ConvertTo-Json; try { $r = Invoke-RestMethod -Uri \"http://localhost:8000/api/affectations\" -Method POST -Body $a -Headers $h -TimeoutSec 10; \"OK: chauffeur affecté\" } catch { \"ERROR $\\($_.Exception.Response.StatusCode.value__\\)\"; $_.ErrorDetails.Message })",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"dmg@carfo.bf\",\"motDePasse\":\"carfo123\"}')",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }; Start-Sleep -Seconds 2; \"Backend stoppé\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@carfo.bf\",\"motDePasse\":\"carfo123\"}')",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }; Start-Sleep -Seconds 2; \"stopped\")",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri http://localhost:8000/api/directions -UseBasicParsing -TimeoutSec 3\\).StatusCode; \"Backend UP\" } catch { \"Backend DOWN\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:4200/images/carfo-logo.png\" -UseBasicParsing -TimeoutSec 3; \"Logo accessible : $\\($r.StatusCode\\), $\\($r.RawContentLength\\) bytes\" } catch { \"DOWN\" })",
+      "Bash(grep -qE 'Started GestionMissionsApplication|BUILD FAILURE|COMPILATION ERROR' /c/Users/PC/AppData/Local/Temp/claude/c--Users-PC-Desktop-STAGE-CARFO-TheMissions/71856eee-f6ad-4c3f-98a2-93a4fcb3137c/tasks/blodfhc5b.output)",
+      "Bash(sleep 4)",
+      "Bash(echo READY)",
+      "Bash(strings /tmp/test-fiche.pdf 2>/dev/null | grep -i \"burkina\\\\|patrie\\\\|rep\\\\|justice\" | head)",
+      "Read(//tmp/**)",
+      "Bash(grep -qE 'Started GestionMissionsApplication|BUILD FAILURE|COMPILATION ERROR' /c/Users/PC/AppData/Local/Temp/claude/c--Users-PC-Desktop-STAGE-CARFO-TheMissions/71856eee-f6ad-4c3f-98a2-93a4fcb3137c/tasks/brrvm0vcp.output)"
+    ]
+  }
+}

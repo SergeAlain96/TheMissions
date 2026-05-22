@@ -112,12 +112,12 @@ public class FicheMissionService {
         orgCell.setBorder(Rectangle.NO_BORDER);
         orgCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-        Paragraph p1 = new Paragraph("RÉPUBLIQUE DU BURKINA FASO",
+        Paragraph p1 = new Paragraph("BURKINA FASO",
                 FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, INK_500));
         p1.setAlignment(Element.ALIGN_RIGHT);
         orgCell.addElement(p1);
 
-        Paragraph p2 = new Paragraph("Unité — Progrès — Justice",
+        Paragraph p2 = new Paragraph("La patrie ou la mort, nous vaincrons",
                 FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8, INK_500));
         p2.setAlignment(Element.ALIGN_RIGHT);
         orgCell.addElement(p2);
