@@ -150,7 +150,7 @@ public class FicheMissionService {
         Paragraph title = new Paragraph();
         title.setAlignment(Element.ALIGN_CENTER);
 
-        Chunk eyebrow = new Chunk("FICHE DE MISSION",
+        Chunk eyebrow = new Chunk("FICHE DE DEMANDE DE MISSION",
                 FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, GOLD));
         title.add(eyebrow);
         title.add(Chunk.NEWLINE);

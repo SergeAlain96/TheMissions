@@ -45,6 +45,9 @@ public class Mission {
     @Column(name = "motif_annulation", length = 500)
     private String motifAnnulation;
 
+    @Column(name = "motif_avis_sg", length = 500)
+    private String motifAvisSg;
+
     // La direction qui soumet la mission
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_direction", nullable = false)

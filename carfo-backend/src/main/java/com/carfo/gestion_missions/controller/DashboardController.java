@@ -50,4 +50,16 @@ public class DashboardController {
         Map<String, Object> missions = dashboardService.getUpcomingMissions();
         return ResponseEntity.ok(missions);
     }
+
+    /**
+     * Module Statistiques — payload filtré strictement par année.
+     * Renvoie : year, totalMissions, missionsValidated, missionsCancelled, missionsClosed,
+     * missionsPending, missionsByStatus, missionsByDirection (List<{direction,count}>),
+     * missionsByMonth (long[12]).
+     */
+    @GetMapping("/statistics")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
+    public ResponseEntity<Map<String, Object>> getStatistics(@RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(dashboardService.getStatistics(year));
+    }
 }

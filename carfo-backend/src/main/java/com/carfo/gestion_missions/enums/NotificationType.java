@@ -1,8 +1,10 @@
 package com.carfo.gestion_missions.enums;
 
 public enum NotificationType {
-    MISSION_SOUMISE,        // une nouvelle mission attend validation (SG)
-    MISSION_VALIDEE,        // mission passée à INITIEE (directeur soumetteur + DMG)
+    MISSION_SOUMISE,        // une nouvelle mission attend l'avis du SG
+    AVIS_SG_FAVORABLE,      // le SG a donné un avis favorable (DMG peut affecter, DG peut valider)
+    AVIS_SG_DEFAVORABLE,    // le SG a donné un avis défavorable (mission bloquée)
+    MISSION_VALIDEE,        // mission passée à INITIEE par le DG (directeur soumetteur + DMG)
     MISSION_ANNULEE,        // mission annulée (directeur soumetteur)
     MISSION_CLOTUREE,       // mission clôturée (DRH)
     AFFECTATION_CREEE,      // chauffeur + véhicule affectés (chauffeur + directeur soumetteur)

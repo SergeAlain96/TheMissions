@@ -18,7 +18,8 @@
       "Bash(echo READY)",
       "Bash(strings /tmp/test-fiche.pdf 2>/dev/null | grep -i \"burkina\\\\|patrie\\\\|rep\\\\|justice\" | head)",
       "Read(//tmp/**)",
-      "Bash(grep -qE 'Started GestionMissionsApplication|BUILD FAILURE|COMPILATION ERROR' /c/Users/PC/AppData/Local/Temp/claude/c--Users-PC-Desktop-STAGE-CARFO-TheMissions/71856eee-f6ad-4c3f-98a2-93a4fcb3137c/tasks/brrvm0vcp.output)"
+      "Bash(grep -qE 'Started GestionMissionsApplication|BUILD FAILURE|COMPILATION ERROR' /c/Users/PC/AppData/Local/Temp/claude/c--Users-PC-Desktop-STAGE-CARFO-TheMissions/71856eee-f6ad-4c3f-98a2-93a4fcb3137c/tasks/brrvm0vcp.output)",
+      "Bash(mvn -f carfo-backend/pom.xml compile -q)"
     ]
   }
 }

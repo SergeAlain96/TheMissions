@@ -62,9 +62,11 @@ class MissionServiceTest {
 
     @Test
     void validerMission_shouldSetStatusToInitiee() {
+        // Nouveau workflow : la validation finale par le DG n'est possible
+        // qu'après un avis favorable du Secrétariat Général.
         Mission mission = Mission.builder()
                 .idMission(1L)
-                .statut(StatutMission.PREVUE)
+                .statut(StatutMission.AVIS_SG_FAVORABLE)
                 .dateDebut(LocalDate.now().plusDays(12))
                 .dateFin(LocalDate.now().plusDays(14))
                 .dateSoumission(LocalDateTime.now())

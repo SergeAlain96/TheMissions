@@ -75,11 +75,22 @@ public class MissionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(mission);
     }
 
-    // PATCH /api/missions/{id}/valider
+    // PATCH /api/missions/{id}/valider — validation finale par le DG (Directeur Général)
     @PatchMapping("/{id}/valider")
-    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('DIRECTEUR', 'ADMINISTRATEUR')")
     public ResponseEntity<MissionViewDTO.MissionDetailView> validerMission(@PathVariable Long id) {
         missionService.validerMission(id);
+        return ResponseEntity.ok(missionService.getMissionDetail(id));
+    }
+
+    // POST /api/missions/{id}/avis-sg — avis du Secrétariat Général (favorable / défavorable)
+    @PostMapping("/{id}/avis-sg")
+    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'ADMINISTRATEUR')")
+    public ResponseEntity<MissionViewDTO.MissionDetailView> donnerAvisSG(@PathVariable Long id,
+                                                                         @RequestBody Map<String, Object> body) {
+        boolean favorable = Boolean.parseBoolean(String.valueOf(body.getOrDefault("favorable", false)));
+        String motif = body.get("motif") != null ? body.get("motif").toString() : null;
+        missionService.donnerAvisSG(id, favorable, motif);
         return ResponseEntity.ok(missionService.getMissionDetail(id));
     }
 

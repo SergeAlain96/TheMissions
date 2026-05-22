@@ -51,6 +51,7 @@ public final class MissionViewDTO {
             StatutMission statut,
             LocalDateTime dateSoumission,
             String motifAnnulation,
+            String motifAvisSg,
             Long idDirection,
             String nomDirection,
             List<ParticipantView> participants,

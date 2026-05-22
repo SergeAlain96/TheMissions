@@ -195,27 +195,87 @@ public class MissionService {
     }
 
     // ============================================================
-    // VALIDER UNE MISSION
+    // DONNER L'AVIS DU SECRÉTARIAT GÉNÉRAL (étape intermédiaire)
+    // ============================================================
+    @Transactional
+    public Mission donnerAvisSG(Long idMission, boolean favorable, String motif) {
+        Mission mission = getMissionById(idMission);
+
+        if (mission.getStatut() != StatutMission.PREVUE) {
+            throw new BusinessRuleException(
+                "Seules les missions au statut PREVUE peuvent recevoir un avis du SG. Statut actuel : " + mission.getStatut()
+            );
+        }
+
+        mission.setStatut(favorable ? StatutMission.AVIS_SG_FAVORABLE : StatutMission.AVIS_SG_DEFAVORABLE);
+        mission.setMotifAvisSg(motif);
+        Mission saved = missionRepository.save(mission);
+
+        String sigle = mission.getDirection() != null ? mission.getDirection().getSigleDirection() : null;
+
+        if (favorable) {
+            // Notif DMG : peut commencer l'affectation
+            List<Agent> dmgs = agentRepository.findDmgAgents();
+            notificationService.notifierTous(
+                    dmgs,
+                    NotificationType.AVIS_SG_FAVORABLE,
+                    "Avis SG favorable — affectation possible",
+                    String.format("« %s » (%s → %s) a reçu un avis favorable. Vous pouvez affecter un chauffeur et un véhicule.",
+                            mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
+                    idMission
+            );
+            // Notif DG : attend la validation finale
+            List<Agent> dgs = agentRepository.findByRoleAndActifTrue(RoleAgent.DIRECTEUR);
+            notificationService.notifierTous(
+                    dgs,
+                    NotificationType.AVIS_SG_FAVORABLE,
+                    "Avis SG favorable — validation requise",
+                    String.format("« %s » a reçu un avis favorable du SG. Validation finale à effectuer.",
+                            mission.getObjetMission()),
+                    idMission
+            );
+        }
+
+        // Notif directeurs émetteurs
+        if (sigle != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(sigle);
+            notificationService.notifierTous(
+                    directeurs,
+                    favorable ? NotificationType.AVIS_SG_FAVORABLE : NotificationType.AVIS_SG_DEFAVORABLE,
+                    favorable ? "Avis SG favorable" : "Avis SG défavorable",
+                    favorable
+                        ? String.format("« %s » a reçu un avis favorable du SG.", mission.getObjetMission())
+                        : String.format("« %s » a reçu un avis défavorable du SG. Mission bloquée.%s",
+                                mission.getObjetMission(),
+                                (motif != null && !motif.isBlank()) ? " Motif : " + motif : ""),
+                    idMission
+            );
+        }
+        return saved;
+    }
+
+    // ============================================================
+    // VALIDER UNE MISSION (DG uniquement, après avis favorable du SG)
     // ============================================================
     @Transactional
     public Mission validerMission(Long idMission) {
         Mission mission = getMissionById(idMission);
 
-        if (mission.getStatut() != StatutMission.PREVUE) {
+        if (mission.getStatut() != StatutMission.AVIS_SG_FAVORABLE) {
             throw new BusinessRuleException(
-                "Seules les missions au statut PREVUE peuvent être validées. Statut actuel : " + mission.getStatut()
+                "Une mission ne peut être validée par le DG qu'après un avis favorable du SG. Statut actuel : " + mission.getStatut()
             );
         }
 
         mission.setStatut(StatutMission.INITIEE);
         Mission saved = missionRepository.save(mission);
 
-        // Notif : prévenir le DMG qu'une affectation est à faire
+        // Notif : prévenir le DMG qu'une affectation est à faire (si pas déjà fait)
         List<Agent> dmgs = agentRepository.findDmgAgents();
         notificationService.notifierTous(
                 dmgs,
                 NotificationType.MISSION_VALIDEE,
-                "Mission validée — affectation à faire",
+                "Mission validée par le DG",
                 String.format("« %s » (%s → %s) est validée et attend un chauffeur + véhicule.",
                         mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
                 idMission
@@ -228,7 +288,7 @@ public class MissionService {
                     directeurs,
                     NotificationType.MISSION_VALIDEE,
                     "Votre mission est validée",
-                    String.format("« %s » a été approuvée par la Secrétaire Générale.", mission.getObjetMission()),
+                    String.format("« %s » a été validée par le Directeur Général.", mission.getObjetMission()),
                     idMission
             );
         }
@@ -309,6 +369,13 @@ public class MissionService {
     @Transactional
     public Affectation affecterRessources(Long idMission, Long idChauffeur, Long idVehicule) {
         Mission mission = getMissionById(idMission);
+
+        if (mission.getStatut() != StatutMission.AVIS_SG_FAVORABLE
+                && mission.getStatut() != StatutMission.INITIEE) {
+            throw new BusinessRuleException(
+                "Une mission ne peut être affectée qu'après un avis favorable du SG. Statut actuel : " + mission.getStatut()
+            );
+        }
 
         Agent chauffeur = agentRepository.findById(idChauffeur)
             .orElseThrow(() -> new ResourceNotFoundException("Chauffeur introuvable : " + idChauffeur));
@@ -562,6 +629,7 @@ public class MissionService {
                 mission.getStatut(),
                 mission.getDateSoumission(),
                 mission.getMotifAnnulation(),
+                mission.getMotifAvisSg(),
                 mission.getDirection() != null ? mission.getDirection().getIdDirection() : null,
                 mission.getDirection() != null ? mission.getDirection().getNomDirection() : null,
                 participants,

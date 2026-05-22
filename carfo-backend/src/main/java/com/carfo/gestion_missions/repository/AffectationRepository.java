@@ -58,4 +58,14 @@ public interface AffectationRepository extends JpaRepository<Affectation, Long> 
         LIMIT 1
     """)
     List<Object[]> findMostUsedChauffeur();
+
+    // Nombre d'affectations par chauffeur pour une année donnée
+    // Renvoie [idChauffeur, count] uniquement pour ceux ayant au moins 1 mission
+    @Query("""
+        SELECT a.chauffeur.idAgent, COUNT(a)
+        FROM Affectation a
+        WHERE YEAR(a.mission.dateDebut) = :annee
+        GROUP BY a.chauffeur.idAgent
+    """)
+    List<Object[]> countAffectationsByChauffeurForYear(@Param("annee") int annee);
 }

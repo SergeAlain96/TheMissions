@@ -10,9 +10,13 @@ import com.carfo.gestion_missions.repository.MissionRepository;
 import com.carfo.gestion_missions.repository.VehiculeRepository;
 import com.carfo.gestion_missions.repository.AgentRepository;
 
+import com.carfo.gestion_missions.entity.Agent;
+
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -106,6 +110,123 @@ public class DashboardService {
 
         log.info("Dashboard statistics successfully retrieved for year: {}", year);
         return stats;
+    }
+
+    /**
+     * Module Statistiques — payload spécialisé filtré strictement par année.
+     * Renvoie les 6 métriques attendues par la page /statistiques :
+     *  total, validated, cancelled, pending, byDirection, byMonth.
+     */
+    public Map<String, Object> getStatistics(Integer year) {
+        int annee = (year != null) ? year : LocalDate.now().getYear();
+        log.info("Computing statistics for year {}", annee);
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("year", annee);
+
+        long total      = missionRepository.countMissionsParAnnee(annee);
+        long validated  = missionRepository.countByStatutAndYear(StatutMission.INITIEE, annee);
+        long cancelled  = missionRepository.countByStatutAndYear(StatutMission.ANNULEE, annee);
+        long closed     = missionRepository.countByStatutAndYear(StatutMission.CLOTUREE, annee);
+        long prevue     = missionRepository.countByStatutAndYear(StatutMission.PREVUE, annee);
+        long avisFav    = missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_FAVORABLE, annee);
+        long avisDefav  = missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_DEFAVORABLE, annee);
+
+        // "pending" = mission encore en workflow (pas encore validée par le DG, pas annulée ni clôturée)
+        long pending = prevue + avisFav;
+
+        stats.put("totalMissions",      total);
+        stats.put("missionsValidated",  validated);
+        stats.put("missionsCancelled",  cancelled);
+        stats.put("missionsClosed",     closed);
+        stats.put("missionsPending",    pending);
+
+        // Détail par statut (utile pour graphe distribution)
+        Map<String, Long> byStatus = new HashMap<>();
+        byStatus.put("PREVUE",              prevue);
+        byStatus.put("AVIS_SG_FAVORABLE",   avisFav);
+        byStatus.put("AVIS_SG_DEFAVORABLE", avisDefav);
+        byStatus.put("INITIEE",             validated);
+        byStatus.put("CLOTUREE",            closed);
+        byStatus.put("ANNULEE",             cancelled);
+        stats.put("missionsByStatus", byStatus);
+
+        // Missions par direction (toute l'année, triée DESC) — [nom, count]
+        var byDirection = missionRepository.countMissionsByDirectionForYear(annee).stream()
+                .map(row -> Map.of(
+                        "direction", String.valueOf(row[0]),
+                        "count",     row[1]
+                ))
+                .toList();
+        stats.put("missionsByDirection", byDirection);
+
+        // Missions par mois — 12 cases (jan → déc), 0 si pas de mission
+        long[] byMonth = new long[12];
+        for (Object[] row : missionRepository.countMissionsByMonthForYear(annee)) {
+            int mois = ((Number) row[0]).intValue(); // 1..12
+            long count = ((Number) row[1]).longValue();
+            if (mois >= 1 && mois <= 12) {
+                byMonth[mois - 1] = count;
+            }
+        }
+        stats.put("missionsByMonth", byMonth);
+
+        // Activité des chauffeurs sur l'année : tous les chauffeurs actifs sont inclus,
+        // même ceux à 0 affectation (utile pour voir qui n'a pas tourné).
+        stats.put("chauffeurStats", buildChauffeurStats(annee));
+
+        return stats;
+    }
+
+    /**
+     * Construit la liste d'activité des chauffeurs pour l'année.
+     * Renvoie une List<Map> triée par nombre de missions DESC, avec en bonus topChauffeur
+     * et leastChauffeur côté payload sous une forme aplatie.
+     */
+    private Map<String, Object> buildChauffeurStats(int annee) {
+        // 1. Tous les chauffeurs actifs (même à 0 affectation)
+        List<Agent> chauffeurs = agentRepository.findAllChauffeurs();
+
+        // 2. Counts par chauffeur ayant affecté au moins 1 mission cette année
+        Map<Long, Long> countByIdAgent = new HashMap<>();
+        for (Object[] row : affectationRepository.countAffectationsByChauffeurForYear(annee)) {
+            Long idAgent = ((Number) row[0]).longValue();
+            Long count   = ((Number) row[1]).longValue();
+            countByIdAgent.put(idAgent, count);
+        }
+
+        // 3. Fusion + tri DESC (le plus actif en premier)
+        List<Map<String, Object>> activity = chauffeurs.stream()
+                .map(c -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("idAgent",     c.getIdAgent());
+                    entry.put("nom",         c.getNom());
+                    entry.put("prenom",      c.getPrenom());
+                    entry.put("matricule",   c.getMatricule());
+                    entry.put("missions",    countByIdAgent.getOrDefault(c.getIdAgent(), 0L));
+                    return entry;
+                })
+                .sorted(Comparator.comparingLong((Map<String, Object> m) -> ((Number) m.get("missions")).longValue()).reversed())
+                .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("missionsPerChauffeur", activity);
+
+        // Top = premier ayant strictement > 0 mission
+        Map<String, Object> top = activity.stream()
+                .filter(m -> ((Number) m.get("missions")).longValue() > 0)
+                .findFirst()
+                .orElse(null);
+        result.put("topChauffeur", top);
+
+        // Least = dernier ayant strictement > 0 mission (pas d'intérêt de retourner un 0 ici)
+        Map<String, Object> least = activity.stream()
+                .filter(m -> ((Number) m.get("missions")).longValue() > 0)
+                .reduce((a, b) -> b)
+                .orElse(null);
+        result.put("leastChauffeur", least);
+
+        return result;
     }
 
     /**

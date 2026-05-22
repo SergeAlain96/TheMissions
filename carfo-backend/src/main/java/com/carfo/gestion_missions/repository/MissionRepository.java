@@ -58,6 +58,33 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     // Compter par statut
     long countByStatut(StatutMission statut);
 
+    // Compter par statut sur une année donnée (date de début dans l'année)
+    @Query("""
+        SELECT COUNT(m) FROM Mission m
+        WHERE m.statut = :statut AND YEAR(m.dateDebut) = :annee
+    """)
+    long countByStatutAndYear(@Param("statut") StatutMission statut, @Param("annee") int annee);
+
+    // Missions par mois pour une année donnée — renvoie [mois (1-12), count]
+    @Query("""
+        SELECT MONTH(m.dateDebut) as mois, COUNT(m) as count
+        FROM Mission m
+        WHERE YEAR(m.dateDebut) = :annee
+        GROUP BY MONTH(m.dateDebut)
+        ORDER BY mois ASC
+    """)
+    List<Object[]> countMissionsByMonthForYear(@Param("annee") int annee);
+
+    // Missions par direction pour une année donnée — renvoie [nomDirection, count]
+    @Query("""
+        SELECT d.nomDirection, COUNT(m)
+        FROM Mission m JOIN m.direction d
+        WHERE YEAR(m.dateDebut) = :annee
+        GROUP BY d.nomDirection
+        ORDER BY COUNT(m) DESC
+    """)
+    List<Object[]> countMissionsByDirectionForYear(@Param("annee") int annee);
+
     // Top 5 directions par nombre de missions
     @Query("""
         SELECT d.nomDirection as direction, COUNT(m) as count
