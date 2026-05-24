@@ -27,4 +27,7 @@ public class MissionRequest {
 
     private List<Long> idAgents;
     private List<String> rolesMission;
+
+    /** ID du chef de mission. Doit obligatoirement faire partie des idAgents. */
+    private Long idChefMission;
 }

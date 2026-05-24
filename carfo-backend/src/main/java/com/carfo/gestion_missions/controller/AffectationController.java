@@ -34,30 +34,35 @@ public class AffectationController {
         return ResponseEntity.ok(missionService.getAffectationsByChauffeur(id));
     }
 
+    /** Liste des affectations d'une mission (incluant ANNULEE pour l'historique). */
     @GetMapping("/mission/{id}")
     @PreAuthorize(READ_ROLES)
-    public ResponseEntity<MissionViewDTO.AffectationView> getAffectationByMission(@PathVariable Long id) {
-        MissionViewDTO.MissionDetailView detail = missionService.getMissionDetail(id);
-        if (detail.affectation() == null) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(detail.affectation());
+    public ResponseEntity<List<MissionViewDTO.AffectationView>> getAffectationsByMission(@PathVariable Long id) {
+        return ResponseEntity.ok(missionService.getMissionDetail(id).affectations());
     }
 
+    /**
+     * Crée une nouvelle affectation. Une mission peut désormais avoir plusieurs affectations
+     * ACTIVE simultanément (gros convoi).
+     */
     @PostMapping
     @PreAuthorize("@securityChecker.isDmgOrAdmin()")
-    public ResponseEntity<MissionViewDTO.AffectationView> createAffectation(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<List<MissionViewDTO.AffectationView>> createAffectation(@RequestBody Map<String, Object> body) {
         Long idMission   = Long.valueOf(body.get("idMission").toString());
         Long idChauffeur = Long.valueOf(body.get("idChauffeur").toString());
         Long idVehicule  = Long.valueOf(body.get("idVehicule").toString());
         missionService.affecterRessources(idMission, idChauffeur, idVehicule);
-        return ResponseEntity.ok(missionService.getMissionDetail(idMission).affectation());
+        return ResponseEntity.ok(missionService.getMissionDetail(idMission).affectations());
     }
 
-    @DeleteMapping("/mission/{id}")
+    /**
+     * Soft-delete d'une affectation : la met en statut ANNULEE et libère le véhicule
+     * si celui-ci n'a pas d'autre affectation ACTIVE sur la période.
+     */
+    @DeleteMapping("/{idAffectation}")
     @PreAuthorize("@securityChecker.isDmgOrAdmin()")
-    public ResponseEntity<Void> deleteAffectation(@PathVariable Long id) {
-        missionService.removeAffectation(id);
+    public ResponseEntity<Void> deleteAffectation(@PathVariable Long idAffectation) {
+        missionService.removeAffectation(idAffectation);
         return ResponseEntity.noContent().build();
     }
 }

@@ -29,4 +29,12 @@ public interface AbsenceRepository extends JpaRepository<Absence, Long> {
             @Param("dateDebut") LocalDate dateDebut,
             @Param("dateFin") LocalDate dateFin
     );
+
+    // Toutes les absences approuvées couvrant la date donnée (bulk pour calcul de statut)
+    @Query("""
+        SELECT a FROM Absence a
+        WHERE a.statut = 'APPROUVE'
+        AND a.dateDebut <= :date AND a.dateFin >= :date
+    """)
+    List<Absence> findApprouveesContenantDate(@Param("date") LocalDate date);
 }

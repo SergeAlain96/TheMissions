@@ -71,7 +71,8 @@ public class MissionController {
                 request.getObjetMission(),
                 request.getIdDirection(),
                 request.getIdAgents(),
-                request.getRolesMission());
+                request.getRolesMission(),
+                request.getIdChefMission());
         return ResponseEntity.status(HttpStatus.CREATED).body(mission);
     }
 
@@ -94,12 +95,22 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getMissionDetail(id));
     }
 
-    // PATCH /api/missions/{id}/annuler
+    // PATCH /api/missions/{id}/annuler — DG, SG ou Admin (le DMG ne peut pas annuler)
     @PatchMapping("/{id}/annuler")
-    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR_DIRECTION', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'ADMINISTRATEUR')")
     public ResponseEntity<Mission> annulerMission(@PathVariable Long id,
                                                    @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(missionService.annulerMission(id, body.get("motif")));
+    }
+
+    // PATCH /api/missions/{id}/prolonger — Chargé d'étude (rallonge la date de fin)
+    @PatchMapping("/{id}/prolonger")
+    @PreAuthorize("hasAnyRole('CHARGE_ETUDE', 'ADMINISTRATEUR')")
+    public ResponseEntity<MissionViewDTO.MissionDetailView> prolongerMission(@PathVariable Long id,
+                                                                              @RequestBody Map<String, String> body) {
+        java.time.LocalDate nouvelleDateFin = java.time.LocalDate.parse(body.get("nouvelleDateFin"));
+        missionService.prolongerMission(id, nouvelleDateFin);
+        return ResponseEntity.ok(missionService.getMissionDetail(id));
     }
 
     // PATCH /api/missions/{id}/cloturer

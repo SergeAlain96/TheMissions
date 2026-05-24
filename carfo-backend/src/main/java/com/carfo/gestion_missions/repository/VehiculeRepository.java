@@ -18,6 +18,9 @@ public interface VehiculeRepository extends JpaRepository<Vehicule, Long> {
     boolean existsByImmatriculation(String immatriculation);
     long countByStatutAndActifTrue(StatutVehicule statut);
 
+    /** Tous les véhicules actifs (utilisé par le module Statistiques). */
+    List<Vehicule> findByActifTrue();
+
     // Véhicules disponibles sur une période : actifs, non affectés à une mission en chevauchement
     @Query("""
         SELECT v FROM Vehicule v

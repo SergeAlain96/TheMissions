@@ -107,8 +107,8 @@ public class DataInitializer {
                 hash, "Administrateur système",  "+22670000001", RoleAgent.ADMINISTRATEUR,      false, dirs.get("DG")));
         created += tryCreate(agent("KABORE",    "Awa",     "SG001",  "AKABORE",    "sg@carfo.bf",
                 hash, "Secrétaire Générale",     "+22670000002", RoleAgent.SECRETAIRE_GENERALE, false, dirs.get("DG")));
-        created += tryCreate(agent("TRAORE",    "Issa",    "DIR001", "ITRAORE",    "directeur@carfo.bf",
-                hash, "Directeur Général Adjoint","+22670000003", RoleAgent.DIRECTEUR,           false, dirs.get("DG")));
+        created += tryCreate(agent("TRAORE",    "Issa",    "DIR001", "ITRAORE",    "dg@carfo.bf",
+                hash, "Directeur Général",         "+22670000003", RoleAgent.DIRECTEUR,           false, dirs.get("DG")));
 
         // Directeurs de direction (un par direction)
         created += tryCreate(agent("ZONGO",     "Boukary", "DMG001", "BZONGO",     "dmg@carfo.bf",
@@ -167,10 +167,22 @@ public class DataInitializer {
     }
 
     private int tryCreate(Agent agent) {
-        if (agentRepository.existsByEmail(agent.getEmail())) {
-            return 0;
+        // Si l'agent existe déjà (par email OU par matricule, le matricule étant l'identifiant
+        // métier stable), on force la synchronisation des champs identifiants. Cela couvre
+        // le cas où un email a changé entre deux versions du DataInitializer (ex : directeur@ → dg@).
+        var existing = agentRepository.findByEmail(agent.getEmail()).orElse(null);
+        if (existing == null) {
+            existing = agentRepository.findByMatricule(agent.getMatricule()).orElse(null);
         }
-        if (agentRepository.existsByMatricule(agent.getMatricule())) {
+        if (existing != null) {
+            existing.setEmail(agent.getEmail());
+            existing.setUsername(agent.getUsername());
+            existing.setNom(agent.getNom());
+            existing.setPrenom(agent.getPrenom());
+            existing.setFonction(agent.getFonction());
+            existing.setMotDePasse(agent.getMotDePasse());
+            existing.setActif(true);
+            agentRepository.save(existing);
             return 0;
         }
         agentRepository.save(agent);

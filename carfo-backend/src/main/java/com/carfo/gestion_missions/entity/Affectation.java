@@ -1,5 +1,6 @@
 package com.carfo.gestion_missions.entity;
 
+import com.carfo.gestion_missions.enums.StatutAffectation;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,9 +20,10 @@ public class Affectation {
     @Column(name = "id_affectation")
     private Long idAffectation;
 
-    // Une affectation concerne une seule mission (OneToOne unique)
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_mission", nullable = false, unique = true)
+    // Une mission peut avoir plusieurs affectations (multi-chauffeurs/véhicules) ;
+    // l'historique des anciennes affectations est conservé via le statut ANNULEE.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_mission", nullable = false)
     @JsonIgnore
     private Mission mission;
 
@@ -39,10 +41,22 @@ public class Affectation {
     @Column(name = "date_affectation", nullable = false)
     private LocalDate dateAffectation;
 
+    /**
+     * Statut de l'affectation. ACTIVE par défaut ; ANNULEE pour soft-delete
+     * (l'affectation reste visible dans l'historique de la mission).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut", nullable = false, length = 20)
+    @Builder.Default
+    private StatutAffectation statut = StatutAffectation.ACTIVE;
+
     @PrePersist
     public void prePersist() {
         if (dateAffectation == null) {
             dateAffectation = LocalDate.now();
+        }
+        if (statut == null) {
+            statut = StatutAffectation.ACTIVE;
         }
     }
 }

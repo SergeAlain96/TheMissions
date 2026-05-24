@@ -46,6 +46,10 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     @Query("SELECT COUNT(m) FROM Mission m WHERE YEAR(m.dateDebut) = :annee")
     Long countMissionsParAnnee(@Param("annee") int annee);
 
+    // Nombre de missions soumises dans l'année — base du numéro séquentiel de la référence
+    @Query("SELECT COUNT(m) FROM Mission m WHERE YEAR(m.dateSoumission) = :annee")
+    long countSoumisesParAnnee(@Param("annee") int annee);
+
     // Missions à venir (non annulées)
     @Query("""
         SELECT m FROM Mission m
@@ -84,6 +88,17 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         ORDER BY COUNT(m) DESC
     """)
     List<Object[]> countMissionsByDirectionForYear(@Param("annee") int annee);
+
+    /** Top 5 lieux les plus visités pour une année donnée — renvoie [lieu, count]. */
+    @Query("""
+        SELECT m.lieu, COUNT(m)
+        FROM Mission m
+        WHERE YEAR(m.dateDebut) = :annee
+        GROUP BY m.lieu
+        ORDER BY COUNT(m) DESC
+        LIMIT 5
+    """)
+    List<Object[]> findTopLieuxForYear(@Param("annee") int annee);
 
     // Top 5 directions par nombre de missions
     @Query("""

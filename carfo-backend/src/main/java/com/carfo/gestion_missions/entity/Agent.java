@@ -1,6 +1,7 @@
 package com.carfo.gestion_missions.entity;
 
 import com.carfo.gestion_missions.enums.RoleAgent;
+import com.carfo.gestion_missions.enums.StatutChauffeur;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
@@ -9,6 +10,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
@@ -57,6 +59,20 @@ public class Agent implements UserDetails {
     @Column(name = "est_chauffeur", nullable = false)
     @Builder.Default
     private boolean estChauffeur = false;
+
+    /**
+     * Statut manuel posé par le DMG : DISPONIBLE (par défaut) ou INDISPONIBLE.
+     * Les statuts EN_MISSION et ABSENT sont calculés à la lecture et ne sont jamais
+     * persistés ici.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut_chauffeur", length = 20)
+    @Builder.Default
+    private StatutChauffeur statutChauffeur = StatutChauffeur.DISPONIBLE;
+
+    /** Date à laquelle un chauffeur INDISPONIBLE redeviendra DISPONIBLE (optionnel). */
+    @Column(name = "date_disponibilite")
+    private LocalDate dateDisponibilite;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)

@@ -1,8 +1,11 @@
 package com.carfo.gestion_missions.controller;
 
 import com.carfo.gestion_missions.dto.AgentDTO.UpdateRequest;
+import com.carfo.gestion_missions.dto.ChauffeurStatusView;
 import com.carfo.gestion_missions.entity.Agent;
+import com.carfo.gestion_missions.enums.StatutChauffeur;
 import com.carfo.gestion_missions.service.AgentService;
+import com.carfo.gestion_missions.service.ChauffeurStatusService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/agents")
@@ -23,6 +27,7 @@ public class AgentController {
             "hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')";
 
     private final AgentService agentService;
+    private final ChauffeurStatusService chauffeurStatusService;
 
     @GetMapping
     @PreAuthorize(READ_ROLES)
@@ -40,6 +45,31 @@ public class AgentController {
     @PreAuthorize(READ_ROLES)
     public ResponseEntity<List<Agent>> getAllChauffeurs() {
         return ResponseEntity.ok(agentService.getAllChauffeurs());
+    }
+
+    /**
+     * Liste des chauffeurs avec leur statut effectif (DISPONIBLE / INDISPONIBLE / EN_MISSION / ABSENT).
+     * Calculé à la lecture en croisant statut manuel, absences en cours et affectations actives.
+     */
+    @GetMapping("/chauffeurs/statuts")
+    @PreAuthorize(READ_ROLES)
+    public ResponseEntity<List<ChauffeurStatusView>> getChauffeursStatuts() {
+        return ResponseEntity.ok(chauffeurStatusService.listChauffeurStatuses());
+    }
+
+    /**
+     * Met à jour le statut manuel d'un chauffeur (DMG only).
+     * Body : { "statut": "DISPONIBLE" | "INDISPONIBLE", "dateDisponibilite": "YYYY-MM-DD"? }
+     */
+    @PatchMapping("/chauffeurs/{id}/statut")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
+    public ResponseEntity<ChauffeurStatusView> updateStatutChauffeur(@PathVariable Long id,
+                                                                     @RequestBody Map<String, Object> body) {
+        StatutChauffeur statut = StatutChauffeur.valueOf(String.valueOf(body.get("statut")).toUpperCase());
+        LocalDate dateDisponibilite = body.get("dateDisponibilite") != null
+                ? LocalDate.parse(String.valueOf(body.get("dateDisponibilite")))
+                : null;
+        return ResponseEntity.ok(chauffeurStatusService.updateStatutManuel(id, statut, dateDisponibilite));
     }
 
     @GetMapping("/disponibles")

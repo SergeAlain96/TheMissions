@@ -66,11 +66,17 @@ public class FicheMissionService {
             doc.add(spacer(18f));
             doc.add(buildInfoTable(mission));
             doc.add(spacer(18f));
-            doc.add(buildParticipantsBlock(participations));
+            doc.add(buildParticipantsBlock(participations, mission));
 
-            if (mission.getAffectation() != null) {
-                doc.add(spacer(18f));
-                doc.add(buildAffectationBlock(mission.getAffectation()));
+            // Multi-affect : on affiche toutes les affectations ACTIVE.
+            if (mission.getAffectations() != null) {
+                List<com.carfo.gestion_missions.entity.Affectation> actives = mission.getAffectations().stream()
+                        .filter(a -> a.getStatut() == com.carfo.gestion_missions.enums.StatutAffectation.ACTIVE)
+                        .toList();
+                for (com.carfo.gestion_missions.entity.Affectation aff : actives) {
+                    doc.add(spacer(18f));
+                    doc.add(buildAffectationBlock(aff));
+                }
             }
 
             doc.add(spacer(28f));
@@ -161,7 +167,10 @@ public class FicheMissionService {
         title.add(h1);
         title.add(Chunk.NEWLINE);
 
-        Chunk meta = new Chunk("Référence : MIS-" + mission.getIdMission() + "  •  Statut : " + mission.getStatut(),
+        String reference = mission.getReference() != null
+                ? mission.getReference()
+                : "MIS-" + mission.getIdMission();
+        Chunk meta = new Chunk("Référence : " + reference + "  •  Statut : " + mission.getStatut(),
                 FontFactory.getFont(FontFactory.HELVETICA, 9, INK_500));
         title.add(meta);
 
@@ -176,17 +185,25 @@ public class FicheMissionService {
         long durationDays = Math.max(1,
                 java.time.temporal.ChronoUnit.DAYS.between(mission.getDateDebut(), mission.getDateFin()) + 1);
 
-        addLabelValue(table, "Direction",   safe(mission.getDirection() != null ? mission.getDirection().getNomDirection() : null));
-        addLabelValue(table, "Lieu",        safe(mission.getLieu()));
-        addLabelValue(table, "Date début",  fmt(mission.getDateDebut()));
-        addLabelValue(table, "Date fin",    fmt(mission.getDateFin()));
-        addLabelValue(table, "Durée",       durationDays + " jour(s)");
-        addLabelValue(table, "Soumise le",  mission.getDateSoumission() != null ? mission.getDateSoumission().toLocalDate().format(DATE_FR) : "—");
+        String chefLabel = "—";
+        if (mission.getChefMission() != null) {
+            var chef = mission.getChefMission();
+            chefLabel = safe(chef.getPrenom()) + " " + safe(chef.getNom())
+                    + (chef.getMatricule() != null ? " (" + chef.getMatricule() + ")" : "");
+        }
+
+        addLabelValue(table, "Direction",       safe(mission.getDirection() != null ? mission.getDirection().getNomDirection() : null));
+        addLabelValue(table, "Chef de mission", chefLabel);
+        addLabelValue(table, "Lieu",            safe(mission.getLieu()));
+        addLabelValue(table, "Date début",      fmt(mission.getDateDebut()));
+        addLabelValue(table, "Date fin",        fmt(mission.getDateFin()));
+        addLabelValue(table, "Durée",           durationDays + " jour(s)");
+        addLabelValue(table, "Soumise le",      mission.getDateSoumission() != null ? mission.getDateSoumission().toLocalDate().format(DATE_FR) : "—");
 
         return table;
     }
 
-    private PdfPTable buildParticipantsBlock(List<Participe> participations) {
+    private PdfPTable buildParticipantsBlock(List<Participe> participations, Mission mission) {
         PdfPTable section = new PdfPTable(1);
         section.setWidthPercentage(100);
 
@@ -212,12 +229,14 @@ public class FicheMissionService {
         addHeader(table, "Nom et prénom");
         addHeader(table, "Rôle");
 
+        Long idChef = mission.getChefMission() != null ? mission.getChefMission().getIdAgent() : null;
         int idx = 1;
         for (Participe p : participations) {
+            boolean estChef = idChef != null && idChef.equals(p.getAgent().getIdAgent());
             addBody(table, String.valueOf(idx++));
             addBody(table, safe(p.getAgent().getMatricule()));
             addBody(table, safe(p.getAgent().getPrenom()) + " " + safe(p.getAgent().getNom()));
-            addBody(table, safe(p.getRoleMission()));
+            addBody(table, safe(p.getRoleMission()) + (estChef ? " · CHEF" : ""));
         }
 
         PdfPCell wrapper = new PdfPCell();

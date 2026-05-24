@@ -11,9 +11,11 @@ import com.carfo.gestion_missions.repository.VehiculeRepository;
 import com.carfo.gestion_missions.repository.AgentRepository;
 
 import com.carfo.gestion_missions.entity.Agent;
+import com.carfo.gestion_missions.entity.Vehicule;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;

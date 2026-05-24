@@ -61,6 +61,15 @@ public class AgentService {
         return chauffeurs.stream()
             .filter(agent -> !chauffeursAbsents.contains(agent.getIdAgent()))
             .filter(agent -> !chauffeursDejaAffectes.contains(agent.getIdAgent()))
+            // Exclut les chauffeurs marqués INDISPONIBLE manuellement par le DMG,
+            // sauf si leur date de disponibilité tombe avant ou pendant la période demandée.
+            .filter(agent -> {
+                if (agent.getStatutChauffeur() != com.carfo.gestion_missions.enums.StatutChauffeur.INDISPONIBLE) {
+                    return true;
+                }
+                LocalDate dispo = agent.getDateDisponibilite();
+                return dispo != null && !dispo.isAfter(dateDebut);
+            })
             .toList();
         }
 

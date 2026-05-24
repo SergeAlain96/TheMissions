@@ -36,6 +36,7 @@ public class MissionService {
     private final AffectationRepository affectationRepository;
     private final VehiculeRepository vehiculeRepository;
     private final NotificationService notificationService;
+    private final com.carfo.gestion_missions.repository.SessionSoumissionRepository sessionRepository;
 
     // ============================================================
     // SOUMETTRE UNE MISSION (règle des 10 jours)
@@ -44,14 +45,16 @@ public class MissionService {
     public Mission soumettreMission(LocalDate dateDebut, LocalDate dateFin,
                                     String lieu, String objetMission,
                                     Long idDirection, List<Long> idAgents,
-                                    List<String> rolesMission) {
+                                    List<String> rolesMission,
+                                    Long idChefMission) {
 
-        // Règle métier : 10 jours d'anticipation minimum
-        long joursAvant = ChronoUnit.DAYS.between(LocalDate.now(), dateDebut);
-        if (joursAvant < 10) {
+        // Règle métier : 10 jours OUVRABLES d'anticipation minimum (week-ends exclus)
+        long joursOuvrables = com.carfo.gestion_missions.util.WorkingDaysUtil
+                .workingDaysBetween(LocalDate.now(), dateDebut);
+        if (joursOuvrables < 10) {
             throw new DelaiInsuffisantException(
-                "Une mission doit être soumise au moins 10 jours avant la date de début. " +
-                "Il reste seulement " + joursAvant + " jour(s)."
+                "Une mission doit être soumise au moins 10 jours ouvrables avant la date de début. " +
+                "Il reste seulement " + joursOuvrables + " jour(s) ouvrable(s)."
             );
         }
 
@@ -63,14 +66,27 @@ public class MissionService {
         Direction direction = directionRepository.findById(idDirection)
             .orElseThrow(() -> new ResourceNotFoundException("Direction introuvable : " + idDirection));
 
+        LocalDateTime now = LocalDateTime.now();
+        int annee = now.getYear();
+        // Référence MIS-YYYY-NNN — NNN = (nb missions soumises cette année) + 1, sur 3 chiffres.
+        // Acceptable pour la charge CARFO ; pour une vraie protection anti-collision, utiliser
+        // une séquence DB ou un lock applicatif.
+        long sequence = missionRepository.countSoumisesParAnnee(annee) + 1;
+        String reference = String.format("MIS-%d-%03d", annee, sequence);
+
+        // Rattachement à la session active du jour (mode souple : peut être null)
+        var sessionActive = sessionRepository.findActive().orElse(null);
+
         Mission mission = Mission.builder()
+                .reference(reference)
                 .dateDebut(dateDebut)
                 .dateFin(dateFin)
                 .lieu(lieu)
                 .objetMission(objetMission)
                 .statut(StatutMission.PREVUE)
-                .dateSoumission(LocalDateTime.now())
+                .dateSoumission(now)
                 .direction(direction)
+                .session(sessionActive)
                 .build();
 
         mission = missionRepository.save(mission);
@@ -93,6 +109,19 @@ public class MissionService {
                 participations.add(p);
             }
             participeRepository.saveAll(participations);
+        }
+
+        // Chef de mission : doit faire partie des participants
+        if (idChefMission != null) {
+            if (idAgents == null || !idAgents.contains(idChefMission)) {
+                throw new BusinessRuleException(
+                    "Le chef de mission doit faire partie des participants sélectionnés."
+                );
+            }
+            Agent chef = agentRepository.findById(idChefMission)
+                .orElseThrow(() -> new ResourceNotFoundException("Chef de mission introuvable : " + idChefMission));
+            mission.setChefMission(chef);
+            mission = missionRepository.save(mission);
         }
 
         // Notif : prévenir toutes les Secrétaires Générales d'une nouvelle mission à valider
@@ -148,11 +177,12 @@ public class MissionService {
             throw new BusinessRuleException("Une mission ne peut être modifiée qu'avant validation.");
         }
 
-        long joursAvant = ChronoUnit.DAYS.between(LocalDate.now(), request.getDateDebut());
-        if (joursAvant < 10) {
+        long joursOuvrables = com.carfo.gestion_missions.util.WorkingDaysUtil
+                .workingDaysBetween(LocalDate.now(), request.getDateDebut());
+        if (joursOuvrables < 10) {
             throw new DelaiInsuffisantException(
-                "Une mission doit être soumise au moins 10 jours avant la date de début. " +
-                "Il reste seulement " + joursAvant + " jour(s)."
+                "Une mission doit être soumise au moins 10 jours ouvrables avant la date de début. " +
+                "Il reste seulement " + joursOuvrables + " jour(s) ouvrable(s)."
             );
         }
 
@@ -189,6 +219,22 @@ public class MissionService {
                 }
                 participeRepository.saveAll(participations);
             }
+        }
+
+        // Mise à jour du chef de mission (doit faire partie des participants)
+        Long idChef = request.getIdChefMission();
+        if (idChef != null) {
+            if (idAgents == null || !idAgents.contains(idChef)) {
+                throw new BusinessRuleException(
+                    "Le chef de mission doit faire partie des participants sélectionnés."
+                );
+            }
+            Agent chef = agentRepository.findById(idChef)
+                .orElseThrow(() -> new ResourceNotFoundException("Chef de mission introuvable : " + idChef));
+            mission.setChefMission(chef);
+        } else if (idAgents != null) {
+            // idAgents fournie sans chef : on retire l'ancien chef
+            mission.setChefMission(null);
         }
 
         return missionRepository.save(mission);
@@ -327,6 +373,60 @@ public class MissionService {
     }
 
     // ============================================================
+    // PROLONGER UNE MISSION (Chargé d'étude)
+    // ============================================================
+    @Transactional
+    public Mission prolongerMission(Long idMission, LocalDate nouvelleDateFin) {
+        Mission mission = getMissionById(idMission);
+
+        if (mission.getStatut() != StatutMission.INITIEE
+                && mission.getStatut() != StatutMission.AVIS_SG_FAVORABLE
+                && mission.getStatut() != StatutMission.PREVUE) {
+            throw new BusinessRuleException(
+                "Une mission ne peut être prolongée que tant qu'elle n'est pas clôturée ou annulée. Statut actuel : " + mission.getStatut()
+            );
+        }
+
+        if (nouvelleDateFin == null) {
+            throw new BusinessRuleException("La nouvelle date de fin est obligatoire.");
+        }
+        if (!nouvelleDateFin.isAfter(mission.getDateFin())) {
+            throw new BusinessRuleException(
+                "La nouvelle date de fin doit être strictement postérieure à la date de fin actuelle ("
+                + mission.getDateFin() + ")."
+            );
+        }
+
+        LocalDate ancienneDateFin = mission.getDateFin();
+        mission.setDateFin(nouvelleDateFin);
+        Mission saved = missionRepository.save(mission);
+
+        // Notif : prévenir le DMG (les chauffeurs et véhicules affectés peuvent être impactés)
+        List<Agent> dmgs = agentRepository.findDmgAgents();
+        notificationService.notifierTous(
+                dmgs,
+                NotificationType.MISSION_VALIDEE, // pas de type dédié — on reste sur MISSION_VALIDEE pour signaler un changement
+                "Mission prolongée",
+                String.format("« %s » prolongée jusqu'au %s (auparavant %s). Vérifiez les affectations.",
+                        mission.getObjetMission(), nouvelleDateFin, ancienneDateFin),
+                idMission
+        );
+        // Notif : directeurs émetteurs
+        if (mission.getDirection() != null) {
+            List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
+                    mission.getDirection().getSigleDirection());
+            notificationService.notifierTous(
+                    directeurs,
+                    NotificationType.MISSION_VALIDEE,
+                    "Votre mission a été prolongée",
+                    String.format("« %s » : nouvelle date de fin %s.", mission.getObjetMission(), nouvelleDateFin),
+                    idMission
+            );
+        }
+        return saved;
+    }
+
+    // ============================================================
     // CLÔTURER UNE MISSION
     // ============================================================
     @Transactional
@@ -341,12 +441,19 @@ public class MissionService {
 
         mission.setStatut(StatutMission.CLOTUREE);
 
-        // Libérer le véhicule si affecté
-        if (mission.getAffectation() != null) {
-            Vehicule vehicule = mission.getAffectation().getVehicule();
-            vehicule.setStatut(com.carfo.gestion_missions.enums.StatutVehicule.DISPONIBLE);
-            vehiculeRepository.save(vehicule);
+        // Libérer tous les véhicules des affectations ACTIVE et marquer celles-ci comme ANNULEE
+        // pour conserver l'historique tout en libérant les ressources.
+        List<Affectation> actives = affectationRepository.findByMissionIdMissionAndStatut(
+                idMission, com.carfo.gestion_missions.enums.StatutAffectation.ACTIVE);
+        for (Affectation aff : actives) {
+            Vehicule v = aff.getVehicule();
+            if (v != null) {
+                v.setStatut(com.carfo.gestion_missions.enums.StatutVehicule.DISPONIBLE);
+                vehiculeRepository.save(v);
+            }
+            aff.setStatut(com.carfo.gestion_missions.enums.StatutAffectation.ANNULEE);
         }
+        affectationRepository.saveAll(actives);
 
         Mission saved = missionRepository.save(mission);
 
@@ -395,9 +502,12 @@ public class MissionService {
         Vehicule vehicule = vehiculeRepository.findById(idVehicule)
             .orElseThrow(() -> new ResourceNotFoundException("Véhicule introuvable : " + idVehicule));
 
-        if (vehicule.getStatut() != StatutVehicule.DISPONIBLE) {
+        // Avec le multi-affect, un véhicule peut être EN_MISSION (déjà engagé sur une autre
+        // mission). On accepte tant qu'il n'y a pas de chevauchement de période.
+        if (!affectationRepository.findAffectationsVehiculeEnChevauchement(
+                idVehicule, mission.getDateDebut(), mission.getDateFin()).isEmpty()) {
             throw new VehiculeIndisponibleException(
-                "Le véhicule " + vehicule.getImmatriculation() + " n'est pas disponible."
+                "Le véhicule " + vehicule.getImmatriculation() + " est déjà engagé sur une mission qui chevauche cette période."
             );
         }
 
@@ -413,15 +523,13 @@ public class MissionService {
         String modele         = vehicule.getModele();
         String immat          = vehicule.getImmatriculation();
 
-        // Supprimer l'ancienne affectation si elle existe
-        affectationRepository.findByMissionIdMission(idMission)
-                .ifPresent(affectationRepository::delete);
-
-        // Créer la nouvelle affectation
+        // Multi-affect : on AJOUTE une affectation, on ne remplace pas l'existante.
+        // Pour remplacer, le DMG doit explicitement annuler l'ancienne via removeAffectation.
         Affectation affectation = Affectation.builder()
                 .mission(mission)
                 .chauffeur(chauffeur)
                 .vehicule(vehicule)
+                .statut(com.carfo.gestion_missions.enums.StatutAffectation.ACTIVE)
                 .build();
 
         // Mettre le véhicule en statut EN_MISSION
@@ -463,18 +571,39 @@ public class MissionService {
                 .toList();
     }
 
+    /**
+     * Annule une affectation (soft-delete via statut ANNULEE). Libère le véhicule.
+     * L'affectation reste visible dans l'historique de la mission.
+     */
     @Transactional
-    public void removeAffectation(Long idMission) {
-        Affectation affectation = affectationRepository.findByMissionIdMission(idMission)
-            .orElseThrow(() -> new ResourceNotFoundException("Affectation introuvable pour la mission : " + idMission));
+    public void removeAffectation(Long idAffectation) {
+        Affectation affectation = affectationRepository.findById(idAffectation)
+            .orElseThrow(() -> new ResourceNotFoundException("Affectation introuvable : " + idAffectation));
+
+        if (affectation.getStatut() == com.carfo.gestion_missions.enums.StatutAffectation.ANNULEE) {
+            return; // déjà annulée — idempotent
+        }
 
         Vehicule vehicule = affectation.getVehicule();
         if (vehicule != null) {
-            vehicule.setStatut(StatutVehicule.DISPONIBLE);
-            vehiculeRepository.save(vehicule);
+            // On ne libère le véhicule que s'il n'a pas d'autre affectation ACTIVE qui chevauche
+            // (cas multi-mission). Recherche par chevauchement de période.
+            boolean encoreEngage = !affectationRepository
+                    .findAffectationsVehiculeEnChevauchement(vehicule.getIdVehicule(),
+                            affectation.getMission().getDateDebut(),
+                            affectation.getMission().getDateFin())
+                    .stream()
+                    .filter(a -> !a.getIdAffectation().equals(idAffectation))
+                    .toList()
+                    .isEmpty();
+            if (!encoreEngage) {
+                vehicule.setStatut(StatutVehicule.DISPONIBLE);
+                vehiculeRepository.save(vehicule);
+            }
         }
 
-        affectationRepository.delete(affectation);
+        affectation.setStatut(com.carfo.gestion_missions.enums.StatutAffectation.ANNULEE);
+        affectationRepository.save(affectation);
     }
 
     // ============================================================
@@ -590,7 +719,9 @@ public class MissionService {
                 vehicule != null ? vehicule.getIdVehicule() : null,
                 vehicule != null ? vehicule.getImmatriculation() : null,
                 vehicule != null ? vehicule.getMarque() : null,
-                vehicule != null ? vehicule.getModele() : null
+                vehicule != null ? vehicule.getModele() : null,
+                affectation.getStatut() != null ? affectation.getStatut().name() : null,
+                affectation.getDateAffectation()
         );
     }
 
@@ -604,6 +735,7 @@ public class MissionService {
     private MissionViewDTO.MissionSummaryView toSummaryView(Mission mission) {
         return new MissionViewDTO.MissionSummaryView(
                 mission.getIdMission(),
+                mission.getReference(),
                 mission.getDateDebut(),
                 mission.getDateFin(),
                 mission.getLieu(),
@@ -620,8 +752,29 @@ public class MissionService {
                 ? List.of()
                 : mission.getParticipants().stream().map(this::toParticipantView).toList();
 
+        List<MissionViewDTO.AffectationView> affectations = mission.getAffectations() == null
+                ? List.of()
+                : mission.getAffectations().stream()
+                    .map(this::toAffectationView)
+                    .filter(java.util.Objects::nonNull)
+                    .sorted(Comparator.comparing(MissionViewDTO.AffectationView::dateAffectation,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
+
+        MissionViewDTO.ChefMissionView chefView = null;
+        if (mission.getChefMission() != null) {
+            Agent chef = mission.getChefMission();
+            chefView = new MissionViewDTO.ChefMissionView(
+                    chef.getIdAgent(),
+                    chef.getNom(),
+                    chef.getPrenom(),
+                    chef.getMatricule()
+            );
+        }
+
         return new MissionViewDTO.MissionDetailView(
                 mission.getIdMission(),
+                mission.getReference(),
                 mission.getDateDebut(),
                 mission.getDateFin(),
                 mission.getLieu(),
@@ -632,8 +785,9 @@ public class MissionService {
                 mission.getMotifAvisSg(),
                 mission.getDirection() != null ? mission.getDirection().getIdDirection() : null,
                 mission.getDirection() != null ? mission.getDirection().getNomDirection() : null,
+                chefView,
                 participants,
-                toAffectationView(mission.getAffectation())
+                affectations
         );
     }
 }

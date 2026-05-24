@@ -1,30 +1,52 @@
 package com.carfo.gestion_missions.repository;
 
 import com.carfo.gestion_missions.entity.Affectation;
-import com.carfo.gestion_missions.entity.Mission;
+import com.carfo.gestion_missions.enums.StatutAffectation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface AffectationRepository extends JpaRepository<Affectation, Long> {
 
-    Optional<Affectation> findByMissionIdMission(Long idMission);
+    /** Toutes les affectations d'une mission (actives ET annulées) — utile pour l'historique. */
+    List<Affectation> findByMissionIdMission(Long idMission);
+
+    /** Affectations d'une mission filtrées par statut (typiquement ACTIVE). */
+    List<Affectation> findByMissionIdMissionAndStatut(Long idMission, StatutAffectation statut);
 
     List<Affectation> findByChauffeurIdAgent(Long idChauffeur);
 
+    /**
+     * Chauffeurs en chevauchement avec la période — seules les affectations ACTIVE comptent.
+     * Une affectation ANNULEE libère bien le chauffeur.
+     */
     @Query("""
         SELECT a FROM Affectation a
         WHERE a.chauffeur.idAgent = :idChauffeur
+        AND a.statut = 'ACTIVE'
         AND a.mission.statut NOT IN ('ANNULEE', 'CLOTUREE')
         AND NOT (a.mission.dateFin < :dateDebut OR a.mission.dateDebut > :dateFin)
     """)
     List<Affectation> findAffectationsChauffeurEnChevauchement(
             @Param("idChauffeur") Long idChauffeur,
+            @Param("dateDebut") java.time.LocalDate dateDebut,
+            @Param("dateFin") java.time.LocalDate dateFin
+    );
+
+    /** Idem pour les véhicules — utilisé pour vérifier qu'un véhicule n'est pas déjà pris. */
+    @Query("""
+        SELECT a FROM Affectation a
+        WHERE a.vehicule.idVehicule = :idVehicule
+        AND a.statut = 'ACTIVE'
+        AND a.mission.statut NOT IN ('ANNULEE', 'CLOTUREE')
+        AND NOT (a.mission.dateFin < :dateDebut OR a.mission.dateDebut > :dateFin)
+    """)
+    List<Affectation> findAffectationsVehiculeEnChevauchement(
+            @Param("idVehicule") Long idVehicule,
             @Param("dateDebut") java.time.LocalDate dateDebut,
             @Param("dateFin") java.time.LocalDate dateFin
     );
@@ -68,4 +90,23 @@ public interface AffectationRepository extends JpaRepository<Affectation, Long> 
         GROUP BY a.chauffeur.idAgent
     """)
     List<Object[]> countAffectationsByChauffeurForYear(@Param("annee") int annee);
+
+    /** Nombre d'affectations par véhicule pour une année donnée — [idVehicule, count]. */
+    @Query("""
+        SELECT a.vehicule.idVehicule, COUNT(a)
+        FROM Affectation a
+        WHERE YEAR(a.mission.dateDebut) = :annee
+        GROUP BY a.vehicule.idVehicule
+    """)
+    List<Object[]> countAffectationsByVehiculeForYear(@Param("annee") int annee);
+
+    // Affectations actives à la date donnée (mission couvrant la date, statut INITIEE,
+    // affectation statut ACTIVE). Sert au calcul de statut "EN_MISSION" des chauffeurs.
+    @Query("""
+        SELECT a FROM Affectation a
+        WHERE a.mission.statut = 'INITIEE'
+        AND a.statut = 'ACTIVE'
+        AND a.mission.dateDebut <= :date AND a.mission.dateFin >= :date
+    """)
+    List<Affectation> findActivesAtDate(@Param("date") java.time.LocalDate date);
 }

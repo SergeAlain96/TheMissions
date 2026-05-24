@@ -56,7 +56,8 @@ class MissionServiceTest {
                 "Mission de test",
                 1L,
                 List.of(),
-                List.of()
+                List.of(),
+                null
         ));
     }
 
@@ -106,7 +107,8 @@ class MissionServiceTest {
                 "Mission test",
                 1L,
                 List.of(10L),
-                List.of("MEMBRE")
+                List.of("MEMBRE"),
+                null
         );
 
         assertThat(mission.getLieu()).isEqualTo("Ouagadougou");
@@ -144,7 +146,12 @@ class MissionServiceTest {
         when(missionRepository.findById(1L)).thenReturn(Optional.of(mission));
         when(agentRepository.findById(20L)).thenReturn(Optional.of(chauffeur));
         when(vehiculeRepository.findById(30L)).thenReturn(Optional.of(vehicule));
-        when(affectationRepository.findByMissionIdMission(1L)).thenReturn(Optional.empty());
+        // Multi-affect : la vérification du chevauchement véhicule retourne une liste vide
+        when(affectationRepository.findAffectationsVehiculeEnChevauchement(
+                org.mockito.ArgumentMatchers.eq(30L),
+                org.mockito.ArgumentMatchers.any(LocalDate.class),
+                org.mockito.ArgumentMatchers.any(LocalDate.class)
+        )).thenReturn(List.of());
         when(affectationRepository.save(any(Affectation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(vehiculeRepository.save(any(Vehicule.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

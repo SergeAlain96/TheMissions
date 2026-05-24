@@ -27,11 +27,21 @@ public final class MissionViewDTO {
             Long idVehicule,
             String immatriculationVehicule,
             String marqueVehicule,
-            String modeleVehicule
+            String modeleVehicule,
+            String statut,                  // ACTIVE | ANNULEE
+            java.time.LocalDate dateAffectation
+    ) {}
+
+    public record ChefMissionView(
+            Long idAgent,
+            String nom,
+            String prenom,
+            String matricule
     ) {}
 
     public record MissionSummaryView(
             Long idMission,
+            String reference,
             LocalDate dateDebut,
             LocalDate dateFin,
             String lieu,
@@ -44,6 +54,7 @@ public final class MissionViewDTO {
 
     public record MissionDetailView(
             Long idMission,
+            String reference,
             LocalDate dateDebut,
             LocalDate dateFin,
             String lieu,
@@ -54,7 +65,8 @@ public final class MissionViewDTO {
             String motifAvisSg,
             Long idDirection,
             String nomDirection,
+            ChefMissionView chefMission,
             List<ParticipantView> participants,
-            AffectationView affectation
+            List<AffectationView> affectations
     ) {}
 }
