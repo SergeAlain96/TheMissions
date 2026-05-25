@@ -8,15 +8,16 @@ import com.carfo.gestion_missions.repository.ParticipeRepository;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
-import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
 import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.PdfContentByte;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfPageEventHelper;
 import com.lowagie.text.pdf.PdfWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,55 +33,75 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Génération de la fiche de demande de mission au format PDF.
+ *
+ * Charte visuelle : palette eCARFO (vert vif #16A34A + or institutionnel).
+ * Structure : en-tête institutionnel → badge référence → bloc d'informations →
+ * participants (zebra) → affectations (tableau unique multi-rangées) → bloc signatures.
+ * Le footer (numéro de page + mention) est ajouté automatiquement à chaque page.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FicheMissionService {
 
-    private static final Color CARFO_GREEN      = new Color(13, 92, 63);     // #0D5C3F
-    private static final Color CARFO_GREEN_DARK = new Color(7, 54, 35);      // #073623
-    private static final Color INK_900          = new Color(15, 23, 42);     // #0F172A
-    private static final Color INK_500          = new Color(100, 116, 139);  // #64748B
-    private static final Color INK_100          = new Color(241, 245, 249);  // #F1F5F9
-    private static final Color INK_200          = new Color(226, 232, 240);  // #E2E8F0
-    private static final Color GOLD             = new Color(180, 139, 34);   // #B48B22
+    // ────────────────────────────────────────────────────────────────────
+    // Palette
+    // ────────────────────────────────────────────────────────────────────
+    private static final Color CARFO_GREEN       = new Color(22, 163, 74);   // #16A34A — vert vif eCARFO
+    private static final Color CARFO_GREEN_DARK  = new Color(21, 128, 61);   // #15803D
+    private static final Color CARFO_GREEN_DEEP  = new Color(20, 83, 45);    // #14532D
+    private static final Color CARFO_GREEN_LIGHT = new Color(236, 253, 243); // #ECFDF3
+    private static final Color INK_900           = new Color(15, 23, 42);    // #0F172A
+    private static final Color INK_700           = new Color(51, 65, 85);    // #334155
+    private static final Color INK_500           = new Color(100, 116, 139); // #64748B
+    private static final Color INK_400           = new Color(148, 163, 184); // #94A3B8
+    private static final Color INK_200           = new Color(226, 232, 240); // #E2E8F0
+    private static final Color INK_100           = new Color(241, 245, 249); // #F1F5F9
+    private static final Color INK_50            = new Color(248, 250, 252); // #F8FAFC
+    private static final Color GOLD              = new Color(180, 139, 34);  // #B48B22
 
     private static final DateTimeFormatter DATE_FR = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.FRENCH);
 
     private final MissionService missionService;
     private final ParticipeRepository participeRepository;
+    private final AppConfigService appConfigService;
 
     @Transactional(readOnly = true)
     public byte[] genererFiche(Long idMission) {
         Mission mission = missionService.getMissionById(idMission);
         List<Participe> participations = participeRepository.findByMissionIdMission(idMission);
+        com.carfo.gestion_missions.entity.AppConfig cfg = appConfigService.get();
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Document doc = new Document(PageSize.A4, 48f, 48f, 48f, 60f);
-            PdfWriter.getInstance(doc, out);
+            // Marges : haut 110pt pour laisser place à la bande verte d'en-tête, bas 60pt pour le footer
+            Document doc = new Document(PageSize.A4, 42f, 42f, 110f, 70f);
+            PdfWriter writer = PdfWriter.getInstance(doc, out);
+            writer.setPageEvent(new HeaderFooterEvent(mission, cfg));
             doc.open();
 
-            doc.add(buildHeader(mission));
-            doc.add(spacer(14f));
+            doc.add(buildReferenceBadge(mission));
+            doc.add(spacer(10f));
             doc.add(buildTitleBlock(mission));
             doc.add(spacer(18f));
             doc.add(buildInfoTable(mission));
             doc.add(spacer(18f));
             doc.add(buildParticipantsBlock(participations, mission));
 
-            // Multi-affect : on affiche toutes les affectations ACTIVE.
+            // Multi-affect : un seul bloc avec un tableau multi-rangées si plusieurs affectations actives
             if (mission.getAffectations() != null) {
-                List<com.carfo.gestion_missions.entity.Affectation> actives = mission.getAffectations().stream()
+                List<Affectation> actives = mission.getAffectations().stream()
                         .filter(a -> a.getStatut() == com.carfo.gestion_missions.enums.StatutAffectation.ACTIVE)
                         .toList();
-                for (com.carfo.gestion_missions.entity.Affectation aff : actives) {
+                if (!actives.isEmpty()) {
                     doc.add(spacer(18f));
-                    doc.add(buildAffectationBlock(aff));
+                    doc.add(buildAffectationsBlock(actives));
                 }
             }
 
             doc.add(spacer(28f));
-            doc.add(buildFooter());
+            doc.add(buildSignaturesBlock());
 
             doc.close();
             return out.toByteArray();
@@ -90,87 +111,181 @@ public class FicheMissionService {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Composants visuels
-    // ------------------------------------------------------------------
+    // ────────────────────────────────────────────────────────────────────
+    // Header / Footer via PdfPageEvent (apparaît sur toutes les pages)
+    // ────────────────────────────────────────────────────────────────────
 
-    private PdfPTable buildHeader(Mission mission) throws Exception {
-        PdfPTable table = new PdfPTable(new float[]{ 1f, 4f });
-        table.setWidthPercentage(100);
-        table.setSpacingAfter(6f);
+    private class HeaderFooterEvent extends PdfPageEventHelper {
+        private final Mission mission;
+        private final com.carfo.gestion_missions.entity.AppConfig cfg;
 
-        // Logo CARFO (gauche)
-        PdfPCell logoCell = new PdfPCell();
-        logoCell.setBorder(Rectangle.NO_BORDER);
-        logoCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        try (InputStream is = new ClassPathResource("static/images/carfo-logo.png").getInputStream()) {
-            byte[] bytes = is.readAllBytes();
-            Image logo = Image.getInstance(bytes);
-            logo.scaleToFit(70f, 70f);
-            logoCell.addElement(logo);
-        } catch (Exception ignored) {
-            logoCell.addElement(new Phrase("CARFO", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, CARFO_GREEN)));
+        HeaderFooterEvent(Mission mission, com.carfo.gestion_missions.entity.AppConfig cfg) {
+            this.mission = mission;
+            this.cfg = cfg;
         }
-        table.addCell(logoCell);
 
-        // Bloc institutionnel (droite)
-        PdfPCell orgCell = new PdfPCell();
-        orgCell.setBorder(Rectangle.NO_BORDER);
-        orgCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                drawHeader(writer);
+                drawFooter(writer);
+            } catch (Exception ex) {
+                log.warn("Header/footer draw failed: {}", ex.getMessage());
+            }
+        }
 
-        Paragraph p1 = new Paragraph("BURKINA FASO",
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, INK_500));
-        p1.setAlignment(Element.ALIGN_RIGHT);
-        orgCell.addElement(p1);
+        private void drawHeader(PdfWriter writer) throws Exception {
+            PdfContentByte cb = writer.getDirectContent();
+            float pageWidth = PageSize.A4.getWidth();
 
-        Paragraph p2 = new Paragraph("La patrie ou la mort, nous vaincrons",
-                FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8, INK_500));
-        p2.setAlignment(Element.ALIGN_RIGHT);
-        orgCell.addElement(p2);
+            // Bande verte d'en-tête (hauteur 90pt depuis le haut)
+            cb.saveState();
+            cb.setColorFill(CARFO_GREEN);
+            cb.rectangle(0, PageSize.A4.getHeight() - 90, pageWidth, 90);
+            cb.fill();
+            // Fine bande or sous la bande verte
+            cb.setColorFill(GOLD);
+            cb.rectangle(0, PageSize.A4.getHeight() - 93, pageWidth, 3);
+            cb.fill();
+            cb.restoreState();
 
-        Paragraph p3 = new Paragraph("\nCaisse Autonome de Retraite des Fonctionnaires",
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, CARFO_GREEN_DARK));
-        p3.setAlignment(Element.ALIGN_RIGHT);
-        orgCell.addElement(p3);
+            // Table contenant le logo et les mentions institutionnelles
+            PdfPTable headerTable = new PdfPTable(new float[]{ 1.2f, 4f });
+            headerTable.setTotalWidth(pageWidth - 84f);
 
-        Paragraph p4 = new Paragraph("Direction Générale — Ouagadougou",
-                FontFactory.getFont(FontFactory.HELVETICA, 9, INK_500));
-        p4.setAlignment(Element.ALIGN_RIGHT);
-        orgCell.addElement(p4);
+            // Logo (gauche)
+            PdfPCell logoCell = new PdfPCell();
+            logoCell.setBorder(Rectangle.NO_BORDER);
+            logoCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            logoCell.setPaddingTop(8f);
+            logoCell.setPaddingBottom(8f);
+            try (InputStream is = new ClassPathResource("static/images/carfo-logo.png").getInputStream()) {
+                byte[] bytes = is.readAllBytes();
+                Image logo = Image.getInstance(bytes);
+                logo.scaleToFit(60f, 60f);
+                logoCell.addElement(logo);
+            } catch (Exception ignored) {
+                Phrase fallback = new Phrase("CARFO", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, Color.WHITE));
+                logoCell.addElement(fallback);
+            }
+            headerTable.addCell(logoCell);
 
-        table.addCell(orgCell);
+            // Mentions institutionnelles (droite, sur fond vert)
+            PdfPCell orgCell = new PdfPCell();
+            orgCell.setBorder(Rectangle.NO_BORDER);
+            orgCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            orgCell.setPaddingTop(8f);
 
-        // Séparateur fin
-        PdfPCell divider = new PdfPCell();
-        divider.setColspan(2);
-        divider.setBorder(Rectangle.BOTTOM);
-        divider.setBorderColor(GOLD);
-        divider.setBorderWidth(1.5f);
-        divider.setFixedHeight(6f);
-        table.addCell(divider);
+            Paragraph p1 = new Paragraph(cfg.getInstitutionPays(),
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.WHITE));
+            p1.setAlignment(Element.ALIGN_RIGHT);
+            orgCell.addElement(p1);
 
-        return table;
+            Paragraph p2 = new Paragraph(cfg.getInstitutionDevise(),
+                    FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8, new Color(220, 252, 231)));
+            p2.setAlignment(Element.ALIGN_RIGHT);
+            orgCell.addElement(p2);
+
+            Paragraph p3 = new Paragraph(cfg.getInstitutionNom().toUpperCase(),
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE));
+            p3.setAlignment(Element.ALIGN_RIGHT);
+            p3.setSpacingBefore(4f);
+            orgCell.addElement(p3);
+
+            Paragraph p4 = new Paragraph(cfg.getInstitutionAdresse(),
+                    FontFactory.getFont(FontFactory.HELVETICA, 8, new Color(220, 252, 231)));
+            p4.setAlignment(Element.ALIGN_RIGHT);
+            orgCell.addElement(p4);
+
+            headerTable.addCell(orgCell);
+            headerTable.writeSelectedRows(0, -1, 42f, PageSize.A4.getHeight() - 10, cb);
+        }
+
+        private void drawFooter(PdfWriter writer) throws Exception {
+            PdfContentByte cb = writer.getDirectContent();
+            float pageWidth = PageSize.A4.getWidth();
+
+            // Ligne fine de séparation
+            cb.saveState();
+            cb.setColorStroke(INK_200);
+            cb.setLineWidth(0.5f);
+            cb.moveTo(42f, 50f);
+            cb.lineTo(pageWidth - 42f, 50f);
+            cb.stroke();
+            cb.restoreState();
+
+            String ref = mission.getReference() != null ? mission.getReference() : ("MIS-" + mission.getIdMission());
+
+            // Footer : 3 colonnes — gauche (réf doc), centre (mention), droite (page)
+            PdfPTable footer = new PdfPTable(new float[]{ 2f, 3f, 2f });
+            footer.setTotalWidth(pageWidth - 84f);
+
+            PdfPCell left = new PdfPCell(new Phrase("Réf. " + ref,
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 7, INK_500)));
+            left.setBorder(Rectangle.NO_BORDER);
+            left.setHorizontalAlignment(Element.ALIGN_LEFT);
+            footer.addCell(left);
+
+            PdfPCell center = new PdfPCell(new Phrase(
+                    cfg.getInstitutionSigle() + " — Système de gestion des missions  •  Document généré le "
+                            + LocalDate.now().format(DATE_FR),
+                    FontFactory.getFont(FontFactory.HELVETICA, 7, INK_500)));
+            center.setBorder(Rectangle.NO_BORDER);
+            center.setHorizontalAlignment(Element.ALIGN_CENTER);
+            footer.addCell(center);
+
+            PdfPCell right = new PdfPCell(new Phrase(
+                    "Page " + writer.getPageNumber(),
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 7, INK_500)));
+            right.setBorder(Rectangle.NO_BORDER);
+            right.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            footer.addCell(right);
+
+            footer.writeSelectedRows(0, -1, 42f, 42f, cb);
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Sections de contenu
+    // ────────────────────────────────────────────────────────────────────
+
+    /** Badge "FICHE DE DEMANDE DE MISSION · MIS-2026-NNN" centré, fond vert clair. */
+    private PdfPTable buildReferenceBadge(Mission mission) {
+        String ref = mission.getReference() != null ? mission.getReference() : ("MIS-" + mission.getIdMission());
+
+        PdfPTable wrapper = new PdfPTable(1);
+        wrapper.setWidthPercentage(100);
+
+        PdfPCell badge = new PdfPCell();
+        badge.setBackgroundColor(CARFO_GREEN_LIGHT);
+        badge.setBorder(Rectangle.LEFT);
+        badge.setBorderColor(CARFO_GREEN);
+        badge.setBorderWidth(3f);
+        badge.setPadding(10f);
+        badge.setPaddingLeft(14f);
+
+        Paragraph p = new Paragraph();
+        p.add(new Chunk("FICHE DE DEMANDE DE MISSION   ",
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, CARFO_GREEN_DEEP)));
+        p.add(new Chunk("·   " + ref,
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, GOLD)));
+        badge.addElement(p);
+
+        wrapper.addCell(badge);
+        return wrapper;
     }
 
     private Paragraph buildTitleBlock(Mission mission) {
         Paragraph title = new Paragraph();
-        title.setAlignment(Element.ALIGN_CENTER);
-
-        Chunk eyebrow = new Chunk("FICHE DE DEMANDE DE MISSION",
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, GOLD));
-        title.add(eyebrow);
-        title.add(Chunk.NEWLINE);
-        title.add(new Chunk("\n", FontFactory.getFont(FontFactory.HELVETICA, 4)));
+        title.setAlignment(Element.ALIGN_LEFT);
+        title.setSpacingBefore(8f);
 
         Chunk h1 = new Chunk(safe(mission.getObjetMission()),
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, CARFO_GREEN_DARK));
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 17, INK_900));
         title.add(h1);
         title.add(Chunk.NEWLINE);
 
-        String reference = mission.getReference() != null
-                ? mission.getReference()
-                : "MIS-" + mission.getIdMission();
-        Chunk meta = new Chunk("Référence : " + reference + "  •  Statut : " + mission.getStatut(),
+        Chunk meta = new Chunk("Statut : " + mission.getStatut(),
                 FontFactory.getFont(FontFactory.HELVETICA, 9, INK_500));
         title.add(meta);
 
@@ -178,9 +293,13 @@ public class FicheMissionService {
     }
 
     private PdfPTable buildInfoTable(Mission mission) {
+        PdfPTable section = new PdfPTable(1);
+        section.setWidthPercentage(100);
+        section.addCell(sectionTitle("Informations générales"));
+
         PdfPTable table = new PdfPTable(new float[]{ 1f, 2f, 1f, 2f });
         table.setWidthPercentage(100);
-        table.setSpacingBefore(4f);
+        table.setSpacingBefore(6f);
 
         long durationDays = Math.max(1,
                 java.time.temporal.ChronoUnit.DAYS.between(mission.getDateDebut(), mission.getDateFin()) + 1);
@@ -195,34 +314,40 @@ public class FicheMissionService {
         addLabelValue(table, "Direction",       safe(mission.getDirection() != null ? mission.getDirection().getNomDirection() : null));
         addLabelValue(table, "Chef de mission", chefLabel);
         addLabelValue(table, "Lieu",            safe(mission.getLieu()));
+        addLabelValue(table, "Durée",           durationDays + " jour(s)");
         addLabelValue(table, "Date début",      fmt(mission.getDateDebut()));
         addLabelValue(table, "Date fin",        fmt(mission.getDateFin()));
-        addLabelValue(table, "Durée",           durationDays + " jour(s)");
-        addLabelValue(table, "Soumise le",      mission.getDateSoumission() != null ? mission.getDateSoumission().toLocalDate().format(DATE_FR) : "—");
+        addLabelValue(table, "Soumise le",      mission.getDateSoumission() != null
+                ? mission.getDateSoumission().toLocalDate().format(DATE_FR) : "—");
+        addLabelValue(table, "Référence",       mission.getReference() != null ? mission.getReference() : "—");
 
-        return table;
+        PdfPCell wrapper = new PdfPCell();
+        wrapper.setBorder(Rectangle.NO_BORDER);
+        wrapper.addElement(table);
+        section.addCell(wrapper);
+
+        return section;
     }
 
     private PdfPTable buildParticipantsBlock(List<Participe> participations, Mission mission) {
         PdfPTable section = new PdfPTable(1);
         section.setWidthPercentage(100);
-
-        PdfPCell title = sectionTitle("Participants à la mission (" + participations.size() + ")");
-        section.addCell(title);
+        section.addCell(sectionTitle("Participants à la mission (" + participations.size() + ")"));
 
         if (participations.isEmpty()) {
             PdfPCell empty = new PdfPCell(new Phrase("Aucun participant déclaré pour cette mission.",
                     FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 10, INK_500)));
             empty.setBorder(Rectangle.NO_BORDER);
-            empty.setPaddingTop(8f);
-            empty.setPaddingBottom(8f);
+            empty.setPaddingTop(10f);
+            empty.setPaddingBottom(10f);
             section.addCell(empty);
             return section;
         }
 
-        PdfPTable table = new PdfPTable(new float[]{ 0.6f, 1.2f, 1.6f, 1f });
+        PdfPTable table = new PdfPTable(new float[]{ 0.5f, 1.2f, 2f, 1.3f });
         table.setWidthPercentage(100);
         table.setSpacingBefore(6f);
+        table.setHeaderRows(1);
 
         addHeader(table, "N°");
         addHeader(table, "Matricule");
@@ -233,88 +358,113 @@ public class FicheMissionService {
         int idx = 1;
         for (Participe p : participations) {
             boolean estChef = idChef != null && idChef.equals(p.getAgent().getIdAgent());
-            addBody(table, String.valueOf(idx++));
-            addBody(table, safe(p.getAgent().getMatricule()));
-            addBody(table, safe(p.getAgent().getPrenom()) + " " + safe(p.getAgent().getNom()));
-            addBody(table, safe(p.getRoleMission()) + (estChef ? " · CHEF" : ""));
+            Color rowBg = (idx % 2 == 0) ? INK_50 : Color.WHITE;
+            addBody(table, String.valueOf(idx), rowBg);
+            addBody(table, safe(p.getAgent().getMatricule()), rowBg);
+            addBody(table, safe(p.getAgent().getPrenom()) + " " + safe(p.getAgent().getNom()), rowBg);
+            addRoleCell(table, safe(p.getRoleMission()), estChef, rowBg);
+            idx++;
         }
 
         PdfPCell wrapper = new PdfPCell();
         wrapper.setBorder(Rectangle.NO_BORDER);
         wrapper.addElement(table);
         section.addCell(wrapper);
-
         return section;
     }
 
-    private PdfPTable buildAffectationBlock(Affectation affectation) {
+    /** Tableau unique listant toutes les affectations actives (plus propre que N blocs). */
+    private PdfPTable buildAffectationsBlock(List<Affectation> actives) {
         PdfPTable section = new PdfPTable(1);
         section.setWidthPercentage(100);
+        section.addCell(sectionTitle("Affectations chauffeur(s) + véhicule(s) — " + actives.size()));
 
-        section.addCell(sectionTitle("Affectation des ressources"));
-
-        PdfPTable table = new PdfPTable(new float[]{ 1f, 2f, 1f, 2f });
+        PdfPTable table = new PdfPTable(new float[]{ 0.4f, 1.8f, 1.2f, 1.6f, 1.2f });
         table.setWidthPercentage(100);
         table.setSpacingBefore(6f);
+        table.setHeaderRows(1);
 
-        addLabelValue(table, "Chauffeur",
-                safe(affectation.getChauffeur().getPrenom()) + " " + safe(affectation.getChauffeur().getNom()));
-        addLabelValue(table, "Matricule",
-                safe(affectation.getChauffeur().getMatricule()));
-        addLabelValue(table, "Véhicule",
-                safe(affectation.getVehicule().getMarque()) + " " + safe(affectation.getVehicule().getModele()));
-        addLabelValue(table, "Immatriculation",
-                safe(affectation.getVehicule().getImmatriculation()));
+        addHeader(table, "N°");
+        addHeader(table, "Chauffeur");
+        addHeader(table, "Matricule");
+        addHeader(table, "Véhicule");
+        addHeader(table, "Immat.");
+
+        int idx = 1;
+        for (Affectation a : actives) {
+            Color rowBg = (idx % 2 == 0) ? INK_50 : Color.WHITE;
+            addBody(table, String.valueOf(idx), rowBg);
+            addBody(table, safe(a.getChauffeur().getPrenom()) + " " + safe(a.getChauffeur().getNom()), rowBg);
+            addBody(table, safe(a.getChauffeur().getMatricule()), rowBg);
+            addBody(table, safe(a.getVehicule().getMarque()) + " " + safe(a.getVehicule().getModele()), rowBg);
+            addBody(table, safe(a.getVehicule().getImmatriculation()), rowBg);
+            idx++;
+        }
 
         PdfPCell wrapper = new PdfPCell();
         wrapper.setBorder(Rectangle.NO_BORDER);
         wrapper.addElement(table);
         section.addCell(wrapper);
-
         return section;
     }
 
-    private PdfPTable buildFooter() {
-        PdfPTable table = new PdfPTable(new float[]{ 1f, 1f });
+    /** Bloc signatures : 3 colonnes — Chargé d'études / SG / Directeur Général. */
+    private PdfPTable buildSignaturesBlock() {
+        PdfPTable table = new PdfPTable(new float[]{ 1f, 1f, 1f });
         table.setWidthPercentage(100);
+        table.setSpacingBefore(20f);
 
-        PdfPCell left = new PdfPCell();
-        left.setBorder(Rectangle.TOP);
-        left.setBorderColor(INK_200);
-        left.setPaddingTop(8f);
-
-        Paragraph p1 = new Paragraph("Document généré le " + LocalDate.now().format(DATE_FR),
-                FontFactory.getFont(FontFactory.HELVETICA, 8, INK_500));
-        left.addElement(p1);
-        Paragraph p2 = new Paragraph("CARFO — Système de gestion des missions",
-                FontFactory.getFont(FontFactory.HELVETICA, 8, INK_500));
-        left.addElement(p2);
-        table.addCell(left);
-
-        PdfPCell right = new PdfPCell();
-        right.setBorder(Rectangle.TOP);
-        right.setBorderColor(INK_200);
-        right.setPaddingTop(8f);
-        Paragraph sign = new Paragraph("Signature et cachet",
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, INK_900));
-        sign.setAlignment(Element.ALIGN_RIGHT);
-        right.addElement(sign);
-        table.addCell(right);
+        table.addCell(signatureCell("Le Chargé d'études"));
+        table.addCell(signatureCell("La Secrétaire Générale"));
+        table.addCell(signatureCell("Le Directeur Général"));
 
         return table;
     }
 
-    // ------------------------------------------------------------------
+    private PdfPCell signatureCell(String role) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setPaddingTop(8f);
+        cell.setPaddingBottom(8f);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+        Paragraph roleP = new Paragraph(role,
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, INK_700));
+        roleP.setAlignment(Element.ALIGN_CENTER);
+        cell.addElement(roleP);
+
+        Paragraph dateP = new Paragraph("Date et signature",
+                FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 7, INK_400));
+        dateP.setAlignment(Element.ALIGN_CENTER);
+        dateP.setSpacingBefore(2f);
+        cell.addElement(dateP);
+
+        // Placeholder zone signature : encadré vide
+        PdfPTable box = new PdfPTable(1);
+        box.setWidthPercentage(80);
+        box.setSpacingBefore(6f);
+        PdfPCell boxCell = new PdfPCell(new Phrase(" "));
+        boxCell.setFixedHeight(70f);
+        boxCell.setBorder(Rectangle.BOX);
+        boxCell.setBorderColor(INK_200);
+        boxCell.setBorderWidth(0.5f);
+        box.addCell(boxCell);
+        cell.addElement(box);
+
+        return cell;
+    }
+
+    // ────────────────────────────────────────────────────────────────────
     // Helpers cellules
-    // ------------------------------------------------------------------
+    // ────────────────────────────────────────────────────────────────────
 
     private PdfPCell sectionTitle(String text) {
-        PdfPCell cell = new PdfPCell(new Phrase(text,
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, CARFO_GREEN_DARK)));
-        cell.setBackgroundColor(INK_100);
+        PdfPCell cell = new PdfPCell(new Phrase(text.toUpperCase(),
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, CARFO_GREEN_DEEP)));
+        cell.setBackgroundColor(CARFO_GREEN_LIGHT);
         cell.setBorder(Rectangle.LEFT);
         cell.setBorderColor(CARFO_GREEN);
-        cell.setBorderWidth(2.5f);
+        cell.setBorderWidth(3f);
         cell.setPadding(8f);
         cell.setPaddingLeft(12f);
         return cell;
@@ -322,7 +472,7 @@ public class FicheMissionService {
 
     private void addLabelValue(PdfPTable table, String label, String value) {
         PdfPCell labelCell = new PdfPCell(new Phrase(label.toUpperCase(),
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 8, INK_500)));
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 7, INK_500)));
         labelCell.setBorder(Rectangle.NO_BORDER);
         labelCell.setBackgroundColor(INK_100);
         labelCell.setPadding(8f);
@@ -333,6 +483,7 @@ public class FicheMissionService {
                 FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, INK_900)));
         valueCell.setBorder(Rectangle.BOTTOM);
         valueCell.setBorderColor(INK_200);
+        valueCell.setBorderWidth(0.5f);
         valueCell.setPadding(8f);
         valueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
         table.addCell(valueCell);
@@ -347,13 +498,38 @@ public class FicheMissionService {
         table.addCell(cell);
     }
 
-    private void addBody(PdfPTable table, String value) {
+    private void addBody(PdfPTable table, String value, Color background) {
         PdfPCell cell = new PdfPCell(new Phrase(value,
-                FontFactory.getFont(FontFactory.HELVETICA, 10, INK_900)));
+                FontFactory.getFont(FontFactory.HELVETICA, 9, INK_900)));
+        cell.setBackgroundColor(background);
         cell.setPadding(7f);
         cell.setBorder(Rectangle.BOTTOM);
         cell.setBorderColor(INK_200);
+        cell.setBorderWidth(0.5f);
         table.addCell(cell);
+    }
+
+    /** Cellule "Rôle" qui met le chef en évidence avec un badge or. */
+    private void addRoleCell(PdfPTable table, String role, boolean estChef, Color background) {
+        if (estChef) {
+            Phrase ph = new Phrase();
+            ph.add(new Chunk(role + "   ",
+                    FontFactory.getFont(FontFactory.HELVETICA, 9, INK_900)));
+            // Badge "CHEF" sur fond or — on simule un fond via setBackground sur le Chunk
+            Chunk chef = new Chunk(" CHEF ",
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 7, Color.WHITE));
+            chef.setBackground(GOLD, 2f, 1f, 2f, 1.5f);
+            ph.add(chef);
+            PdfPCell cell = new PdfPCell(ph);
+            cell.setBackgroundColor(background);
+            cell.setPadding(7f);
+            cell.setBorder(Rectangle.BOTTOM);
+            cell.setBorderColor(INK_200);
+            cell.setBorderWidth(0.5f);
+            table.addCell(cell);
+        } else {
+            addBody(table, role, background);
+        }
     }
 
     private Paragraph spacer(float height) {
