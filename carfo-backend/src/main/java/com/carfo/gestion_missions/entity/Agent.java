@@ -82,6 +82,10 @@ public class Agent implements UserDetails {
     @Builder.Default
     private boolean actif = true;  // Désactiver sans supprimer historique (missions, absences, affectations)
 
+    /** Horodatage de la dernière connexion réussie (mis à jour par AuthService). */
+    @Column(name = "last_login_at")
+    private java.time.LocalDateTime lastLoginAt;
+
     // Relation avec Direction
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_direction", nullable = false)

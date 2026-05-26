@@ -37,6 +37,8 @@ public class MissionService {
     private final VehiculeRepository vehiculeRepository;
     private final NotificationService notificationService;
     private final com.carfo.gestion_missions.repository.SessionSoumissionRepository sessionRepository;
+    private final AppConfigService appConfigService;
+    private final AuditService auditService;
 
     // ============================================================
     // SOUMETTRE UNE MISSION (règle des 10 jours)
@@ -48,13 +50,28 @@ public class MissionService {
                                     List<String> rolesMission,
                                     Long idChefMission) {
 
-        // Règle métier : 10 jours OUVRABLES d'anticipation minimum (week-ends exclus)
-        long joursOuvrables = com.carfo.gestion_missions.util.WorkingDaysUtil
-                .workingDaysBetween(LocalDate.now(), dateDebut);
-        if (joursOuvrables < 10) {
+        // Règle métier configurable (cf. onglet Paramètres → Règles métier)
+        var cfg = appConfigService.get();
+        int delaiMin = cfg.getDelaiMinJoursOuvrables() != null ? cfg.getDelaiMinJoursOuvrables() : 10;
+        boolean excludeWeekends = Boolean.TRUE.equals(cfg.getExcludeWeekends());
+
+        long jours = excludeWeekends
+                ? com.carfo.gestion_missions.util.WorkingDaysUtil.workingDaysBetween(LocalDate.now(), dateDebut)
+                : java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), dateDebut);
+        if (jours < delaiMin) {
+            String unite = excludeWeekends ? "jours ouvrables" : "jours";
             throw new DelaiInsuffisantException(
-                "Une mission doit être soumise au moins 10 jours ouvrables avant la date de début. " +
-                "Il reste seulement " + joursOuvrables + " jour(s) ouvrable(s)."
+                "Une mission doit être soumise au moins " + delaiMin + " " + unite + " avant la date de début. " +
+                "Il reste seulement " + jours + " " + unite + "."
+            );
+        }
+
+        // Mode strict des sessions : refuser la création hors session ouverte
+        if (Boolean.TRUE.equals(cfg.getSessionStrictMode())
+                && sessionRepository.findActive().isEmpty()) {
+            throw new BusinessRuleException(
+                "Aucune session de soumission n'est ouverte. Le mode strict est actif : "
+                + "demandez au Chargé d'études d'ouvrir une session avant de soumettre."
             );
         }
 
@@ -68,11 +85,12 @@ public class MissionService {
 
         LocalDateTime now = LocalDateTime.now();
         int annee = now.getYear();
-        // Référence MIS-YYYY-NNN — NNN = (nb missions soumises cette année) + 1, sur 3 chiffres.
-        // Acceptable pour la charge CARFO ; pour une vraie protection anti-collision, utiliser
-        // une séquence DB ou un lock applicatif.
+        // Référence {prefix}-YYYY-NNN — NNN = (nb missions soumises cette année) + 1
+        // Préfixe et padding paramétrables via AppConfig (Paramètres → Règles métier).
         long sequence = missionRepository.countSoumisesParAnnee(annee) + 1;
-        String reference = String.format("MIS-%d-%03d", annee, sequence);
+        String prefix = cfg.getReferencePrefix() != null ? cfg.getReferencePrefix() : "MIS";
+        int padding = cfg.getReferenceNumberPadding() != null ? cfg.getReferenceNumberPadding() : 3;
+        String reference = String.format("%s-%d-%0" + padding + "d", prefix, annee, sequence);
 
         // Rattachement à la session active du jour (mode souple : peut être null)
         var sessionActive = sessionRepository.findActive().orElse(null);
@@ -124,11 +142,24 @@ public class MissionService {
             mission = missionRepository.save(mission);
         }
 
-        // Notif : prévenir toutes les Secrétaires Générales d'une nouvelle mission à valider
+        // Audit
+        auditService.log(com.carfo.gestion_missions.enums.AuditCategory.MISSION,
+                "MISSION_SOUMETTRE", "Mission", mission.getIdMission(),
+                "Soumission de " + reference + " — " + objetMission);
+
+        // Notif : prévenir toutes les Secrétaires Générales d'une nouvelle mission à valider.
+        // Utilise le template configurable (Paramètres → Notifications) avec fallback hardcodé.
         List<Agent> sgs = agentRepository.findByRoleAndActifTrue(RoleAgent.SECRETAIRE_GENERALE);
-        notificationService.notifierTous(
+        notificationService.notifierTousTemplate(
                 sgs,
                 NotificationType.MISSION_SOUMISE,
+                java.util.Map.of(
+                        "direction", direction.getSigleDirection() != null ? direction.getSigleDirection() : "",
+                        "objet",     objetMission != null ? objetMission : "",
+                        "dateDebut", dateDebut.toString(),
+                        "dateFin",   dateFin.toString(),
+                        "reference", reference
+                ),
                 "Nouvelle mission à valider",
                 String.format("La %s a soumis : %s (%s → %s)",
                         direction.getSigleDirection(), objetMission, dateDebut, dateFin),
@@ -177,12 +208,17 @@ public class MissionService {
             throw new BusinessRuleException("Une mission ne peut être modifiée qu'avant validation.");
         }
 
-        long joursOuvrables = com.carfo.gestion_missions.util.WorkingDaysUtil
-                .workingDaysBetween(LocalDate.now(), request.getDateDebut());
-        if (joursOuvrables < 10) {
+        var cfgUpd = appConfigService.get();
+        int delaiMinUpd = cfgUpd.getDelaiMinJoursOuvrables() != null ? cfgUpd.getDelaiMinJoursOuvrables() : 10;
+        boolean excludeWeekendsUpd = Boolean.TRUE.equals(cfgUpd.getExcludeWeekends());
+        long joursUpd = excludeWeekendsUpd
+                ? com.carfo.gestion_missions.util.WorkingDaysUtil.workingDaysBetween(LocalDate.now(), request.getDateDebut())
+                : java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), request.getDateDebut());
+        if (joursUpd < delaiMinUpd) {
+            String unite = excludeWeekendsUpd ? "jours ouvrables" : "jours";
             throw new DelaiInsuffisantException(
-                "Une mission doit être soumise au moins 10 jours ouvrables avant la date de début. " +
-                "Il reste seulement " + joursOuvrables + " jour(s) ouvrable(s)."
+                "Une mission doit être soumise au moins " + delaiMinUpd + " " + unite + " avant la date de début. " +
+                "Il reste seulement " + joursUpd + " " + unite + "."
             );
         }
 
@@ -257,14 +293,31 @@ public class MissionService {
         mission.setMotifAvisSg(motif);
         Mission saved = missionRepository.save(mission);
 
+        // Audit
+        auditService.log(com.carfo.gestion_missions.enums.AuditCategory.MISSION,
+                favorable ? "MISSION_AVIS_FAVORABLE" : "MISSION_AVIS_DEFAVORABLE",
+                "Mission", idMission,
+                "Avis SG " + (favorable ? "favorable" : "défavorable") + " sur "
+                + (mission.getReference() != null ? mission.getReference() : ("#" + idMission))
+                + (motif != null && !motif.isBlank() ? " — Motif : " + motif : ""));
+
         String sigle = mission.getDirection() != null ? mission.getDirection().getSigleDirection() : null;
+
+        // Variables communes pour l'interpolation des templates
+        java.util.Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("objet",       safeStr(mission.getObjetMission()));
+        vars.put("reference",   safeStr(mission.getReference()));
+        vars.put("dateDebut",   String.valueOf(mission.getDateDebut()));
+        vars.put("dateFin",     String.valueOf(mission.getDateFin()));
+        vars.put("direction",   safeStr(sigle));
+        vars.put("motif",       safeStr(motif));
+        vars.put("motifSuffix", (motif != null && !motif.isBlank()) ? " Motif : " + motif : "");
 
         if (favorable) {
             // Notif DMG : peut commencer l'affectation
             List<Agent> dmgs = agentRepository.findDmgAgents();
-            notificationService.notifierTous(
-                    dmgs,
-                    NotificationType.AVIS_SG_FAVORABLE,
+            notificationService.notifierTousTemplate(
+                    dmgs, NotificationType.AVIS_SG_FAVORABLE, vars,
                     "Avis SG favorable — affectation possible",
                     String.format("« %s » (%s → %s) a reçu un avis favorable. Vous pouvez affecter un chauffeur et un véhicule.",
                             mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
@@ -272,9 +325,8 @@ public class MissionService {
             );
             // Notif DG : attend la validation finale
             List<Agent> dgs = agentRepository.findByRoleAndActifTrue(RoleAgent.DIRECTEUR);
-            notificationService.notifierTous(
-                    dgs,
-                    NotificationType.AVIS_SG_FAVORABLE,
+            notificationService.notifierTousTemplate(
+                    dgs, NotificationType.AVIS_SG_FAVORABLE, vars,
                     "Avis SG favorable — validation requise",
                     String.format("« %s » a reçu un avis favorable du SG. Validation finale à effectuer.",
                             mission.getObjetMission()),
@@ -285,20 +337,24 @@ public class MissionService {
         // Notif directeurs émetteurs
         if (sigle != null) {
             List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(sigle);
-            notificationService.notifierTous(
-                    directeurs,
-                    favorable ? NotificationType.AVIS_SG_FAVORABLE : NotificationType.AVIS_SG_DEFAVORABLE,
-                    favorable ? "Avis SG favorable" : "Avis SG défavorable",
-                    favorable
-                        ? String.format("« %s » a reçu un avis favorable du SG.", mission.getObjetMission())
-                        : String.format("« %s » a reçu un avis défavorable du SG. Mission bloquée.%s",
-                                mission.getObjetMission(),
-                                (motif != null && !motif.isBlank()) ? " Motif : " + motif : ""),
-                    idMission
+            NotificationType type = favorable
+                    ? NotificationType.AVIS_SG_FAVORABLE
+                    : NotificationType.AVIS_SG_DEFAVORABLE;
+            String fallbackTitre = favorable ? "Avis SG favorable" : "Avis SG défavorable";
+            String fallbackBody = favorable
+                    ? String.format("« %s » a reçu un avis favorable du SG.", mission.getObjetMission())
+                    : String.format("« %s » a reçu un avis défavorable du SG. Mission bloquée.%s",
+                            mission.getObjetMission(),
+                            (motif != null && !motif.isBlank()) ? " Motif : " + motif : "");
+            notificationService.notifierTousTemplate(
+                    directeurs, type, vars, fallbackTitre, fallbackBody, idMission
             );
         }
         return saved;
     }
+
+    /** Helper local pour éviter les NPE lors de la construction de Map de vars. */
+    private String safeStr(String s) { return s == null ? "" : s; }
 
     // ============================================================
     // VALIDER UNE MISSION (DG uniquement, après avis favorable du SG)
@@ -316,11 +372,24 @@ public class MissionService {
         mission.setStatut(StatutMission.INITIEE);
         Mission saved = missionRepository.save(mission);
 
+        // Audit
+        auditService.log(com.carfo.gestion_missions.enums.AuditCategory.MISSION,
+                "MISSION_VALIDER", "Mission", idMission,
+                "Validation DG de "
+                + (mission.getReference() != null ? mission.getReference() : ("#" + idMission)));
+
+        java.util.Map<String, String> vars = java.util.Map.of(
+                "objet",     safeStr(mission.getObjetMission()),
+                "reference", safeStr(mission.getReference()),
+                "dateDebut", String.valueOf(mission.getDateDebut()),
+                "dateFin",   String.valueOf(mission.getDateFin()),
+                "direction", mission.getDirection() != null ? safeStr(mission.getDirection().getSigleDirection()) : ""
+        );
+
         // Notif : prévenir le DMG qu'une affectation est à faire (si pas déjà fait)
         List<Agent> dmgs = agentRepository.findDmgAgents();
-        notificationService.notifierTous(
-                dmgs,
-                NotificationType.MISSION_VALIDEE,
+        notificationService.notifierTousTemplate(
+                dmgs, NotificationType.MISSION_VALIDEE, vars,
                 "Mission validée par le DG",
                 String.format("« %s » (%s → %s) est validée et attend un chauffeur + véhicule.",
                         mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
@@ -330,9 +399,8 @@ public class MissionService {
         if (mission.getDirection() != null) {
             List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
                     mission.getDirection().getSigleDirection());
-            notificationService.notifierTous(
-                    directeurs,
-                    NotificationType.MISSION_VALIDEE,
+            notificationService.notifierTousTemplate(
+                    directeurs, NotificationType.MISSION_VALIDEE, vars,
                     "Votre mission est validée",
                     String.format("« %s » a été validée par le Directeur Général.", mission.getObjetMission()),
                     idMission
@@ -356,13 +424,25 @@ public class MissionService {
         mission.setMotifAnnulation(motif);
         Mission saved = missionRepository.save(mission);
 
+        // Audit
+        auditService.log(com.carfo.gestion_missions.enums.AuditCategory.MISSION,
+                "MISSION_ANNULER", "Mission", idMission,
+                "Annulation de "
+                + (mission.getReference() != null ? mission.getReference() : ("#" + idMission))
+                + (motif != null && !motif.isBlank() ? " — Motif : " + motif : ""));
+
         // Notif : prévenir les directeurs de la direction émettrice
         if (mission.getDirection() != null) {
             List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
                     mission.getDirection().getSigleDirection());
-            notificationService.notifierTous(
-                    directeurs,
-                    NotificationType.MISSION_ANNULEE,
+            java.util.Map<String, String> varsAnn = java.util.Map.of(
+                    "objet",       safeStr(mission.getObjetMission()),
+                    "reference",   safeStr(mission.getReference()),
+                    "motif",       safeStr(motif),
+                    "motifSuffix", (motif != null && !motif.isBlank()) ? " Motif : " + motif : ""
+            );
+            notificationService.notifierTousTemplate(
+                    directeurs, NotificationType.MISSION_ANNULEE, varsAnn,
                     "Mission annulée",
                     String.format("« %s » a été annulée. Motif : %s",
                             mission.getObjetMission(), motif != null ? motif : "non précisé"),
@@ -401,11 +481,19 @@ public class MissionService {
         mission.setDateFin(nouvelleDateFin);
         Mission saved = missionRepository.save(mission);
 
+        java.util.Map<String, String> varsProl = java.util.Map.of(
+                "objet",            safeStr(mission.getObjetMission()),
+                "reference",        safeStr(mission.getReference()),
+                "dateDebut",        String.valueOf(mission.getDateDebut()),
+                "dateFin",          String.valueOf(nouvelleDateFin),
+                "ancienneDateFin",  String.valueOf(ancienneDateFin),
+                "nouvelleDateFin",  String.valueOf(nouvelleDateFin)
+        );
+
         // Notif : prévenir le DMG (les chauffeurs et véhicules affectés peuvent être impactés)
         List<Agent> dmgs = agentRepository.findDmgAgents();
-        notificationService.notifierTous(
-                dmgs,
-                NotificationType.MISSION_VALIDEE, // pas de type dédié — on reste sur MISSION_VALIDEE pour signaler un changement
+        notificationService.notifierTousTemplate(
+                dmgs, NotificationType.MISSION_VALIDEE, varsProl,
                 "Mission prolongée",
                 String.format("« %s » prolongée jusqu'au %s (auparavant %s). Vérifiez les affectations.",
                         mission.getObjetMission(), nouvelleDateFin, ancienneDateFin),
@@ -415,9 +503,8 @@ public class MissionService {
         if (mission.getDirection() != null) {
             List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(
                     mission.getDirection().getSigleDirection());
-            notificationService.notifierTous(
-                    directeurs,
-                    NotificationType.MISSION_VALIDEE,
+            notificationService.notifierTousTemplate(
+                    directeurs, NotificationType.MISSION_VALIDEE, varsProl,
                     "Votre mission a été prolongée",
                     String.format("« %s » : nouvelle date de fin %s.", mission.getObjetMission(), nouvelleDateFin),
                     idMission
@@ -459,9 +546,14 @@ public class MissionService {
 
         // Notif : DRH (la mission clôturée passe au traitement RH)
         List<Agent> drhs = agentRepository.findDirecteursParSigleDirection("DRH");
-        notificationService.notifierTous(
-                drhs,
-                NotificationType.MISSION_CLOTUREE,
+        java.util.Map<String, String> varsClo = java.util.Map.of(
+                "objet",     safeStr(mission.getObjetMission()),
+                "reference", safeStr(mission.getReference()),
+                "dateDebut", String.valueOf(mission.getDateDebut()),
+                "dateFin",   String.valueOf(mission.getDateFin())
+        );
+        notificationService.notifierTousTemplate(
+                drhs, NotificationType.MISSION_CLOTUREE, varsClo,
                 "Mission clôturée — traitement RH",
                 String.format("« %s » (%s → %s) est clôturée. Fiche disponible pour la DRH.",
                         mission.getObjetMission(), mission.getDateDebut(), mission.getDateFin()),
@@ -538,10 +630,27 @@ public class MissionService {
 
         Affectation saved = affectationRepository.save(affectation);
 
+        // Audit
+        auditService.log(com.carfo.gestion_missions.enums.AuditCategory.AFFECTATION,
+                "AFFECTATION_CREER", "Affectation", saved.getIdAffectation(),
+                "Affectation de " + prenomChauffeur + " " + nomChauffeur
+                + " + " + marque + " " + modele + " (" + immat + ") sur "
+                + (mission.getReference() != null ? mission.getReference() : ("#" + idMission)));
+
+        java.util.Map<String, String> varsAff = java.util.Map.of(
+                "objet",     safeStr(objetMission),
+                "reference", safeStr(mission.getReference()),
+                "dateDebut", String.valueOf(dateDebut),
+                "dateFin",   String.valueOf(dateFin),
+                "chauffeur", safeStr(prenomChauffeur) + " " + safeStr(nomChauffeur),
+                "vehicule",  safeStr(marque) + " " + safeStr(modele) + " (" + safeStr(immat) + ")",
+                "prenom",    safeStr(prenomChauffeur),
+                "nom",       safeStr(nomChauffeur)
+        );
+
         // Notif : prévenir le chauffeur
-        notificationService.notifier(
-                chauffeur,
-                NotificationType.AFFECTATION_CREEE,
+        notificationService.notifierTemplate(
+                chauffeur, NotificationType.AFFECTATION_CREEE, varsAff,
                 "Vous avez été affecté à une mission",
                 String.format("« %s » du %s au %s — véhicule %s %s (%s).",
                         objetMission, dateDebut, dateFin, marque, modele, immat),
@@ -551,9 +660,8 @@ public class MissionService {
         // Notif : prévenir les directeurs de la direction émettrice
         if (sigleDirection != null) {
             List<Agent> directeurs = agentRepository.findDirecteursParSigleDirection(sigleDirection);
-            notificationService.notifierTous(
-                    directeurs,
-                    NotificationType.AFFECTATION_CREEE,
+            notificationService.notifierTousTemplate(
+                    directeurs, NotificationType.AFFECTATION_CREEE, varsAff,
                     "Mission affectée",
                     String.format("« %s » : chauffeur %s %s, véhicule %s %s.",
                             objetMission, prenomChauffeur, nomChauffeur, marque, modele),

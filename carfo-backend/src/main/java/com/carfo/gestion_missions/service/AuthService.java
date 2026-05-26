@@ -32,7 +32,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final AuthenticationManager authenticationManager;
+    private final AppConfigService appConfigService;
+    private final AuditService auditService;
 
+    @Transactional
     public JwtResponse login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -42,6 +45,15 @@ public class AuthService {
         );
 
         Agent agent = (Agent) authentication.getPrincipal();
+        // Trace de la dernière connexion (utilisée par l'onglet Comptes & sécurité)
+        agent.setLastLoginAt(java.time.LocalDateTime.now());
+        agentRepository.save(agent);
+
+        // Audit : login réussi (l'agent n'est pas encore dans le SecurityContext → on impute explicitement)
+        auditService.logAs(agent, com.carfo.gestion_missions.enums.AuditCategory.AUTH,
+                "LOGIN", "Agent", agent.getIdAgent(),
+                "Connexion réussie de " + agent.getPrenom() + " " + agent.getNom());
+
         String token = jwtUtils.generateToken(agent);
 
         return JwtResponse.builder()
@@ -67,6 +79,9 @@ public class AuthService {
         if (request.isEstChauffeur() && !isCurrentUserDmg()) {
             throw new BusinessRuleException("Seul le DMG peut créer un chauffeur.");
         }
+
+        // Politique de mot de passe configurable (Paramètres → Comptes & sécurité)
+        validatePasswordPolicy(request.getMotDePasse());
 
         Long idDirection = Objects.requireNonNull(request.getIdDirection(), "idDirection est obligatoire");
 
@@ -110,6 +125,37 @@ public class AuthService {
             .nomDirection(saved.getDirection().getNomDirection())
             .username(saved.getUsername())
             .build();
+    }
+
+    /**
+     * Vérifie le mot de passe contre la politique configurée dans AppConfig.
+     * Lève une BusinessRuleException avec la liste des règles violées.
+     */
+    private void validatePasswordPolicy(String password) {
+        if (password == null) {
+            throw new BusinessRuleException("Le mot de passe est obligatoire.");
+        }
+        var cfg = appConfigService.get();
+        int min = cfg.getPasswordMinLength() != null ? cfg.getPasswordMinLength() : 8;
+        java.util.List<String> violations = new java.util.ArrayList<>();
+        if (password.length() < min) {
+            violations.add("au moins " + min + " caractères");
+        }
+        if (Boolean.TRUE.equals(cfg.getPasswordRequireUppercase()) && !password.matches(".*[A-Z].*")) {
+            violations.add("au moins une majuscule");
+        }
+        if (Boolean.TRUE.equals(cfg.getPasswordRequireDigit()) && !password.matches(".*\\d.*")) {
+            violations.add("au moins un chiffre");
+        }
+        if (Boolean.TRUE.equals(cfg.getPasswordRequireSpecial())
+                && !password.matches(".*[!@#$%^&*()_+\\-={}\\[\\]:;\"'<>,.?/|\\\\~`].*")) {
+            violations.add("au moins un caractère spécial");
+        }
+        if (!violations.isEmpty()) {
+            throw new BusinessRuleException(
+                    "Le mot de passe doit contenir " + String.join(", ", violations) + "."
+            );
+        }
     }
 
     /**

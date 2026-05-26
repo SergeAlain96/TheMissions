@@ -177,7 +177,87 @@ public class DashboardService {
         // même ceux à 0 affectation (utile pour voir qui n'a pas tourné).
         stats.put("chauffeurStats", buildChauffeurStats(annee));
 
+        // Activité des véhicules (symétrique aux chauffeurs)
+        stats.put("vehiculeStats", buildVehiculeStats(annee));
+
+        // Top 5 lieux les plus visités sur l'année
+        var topLieux = missionRepository.findTopLieuxForYear(annee).stream()
+                .map(row -> Map.of(
+                        "lieu",  String.valueOf(row[0]),
+                        "count", row[1]
+                ))
+                .toList();
+        stats.put("topLieux", topLieux);
+
+        // Indicateurs ressources (pas filtrés par année — état courant du système)
+        Map<String, Object> ressources = new HashMap<>();
+        ressources.put("totalAgents",          agentRepository.countByActif(true));
+        ressources.put("totalChauffeurs",      agentRepository.countByEstChauffeurAndActif(true, true));
+        ressources.put("vehiculesDisponibles", vehiculeRepository.countByStatutAndActifTrue(
+                com.carfo.gestion_missions.enums.StatutVehicule.DISPONIBLE));
+        stats.put("ressources", ressources);
+
+        // Comparaison année N-1 (mêmes 4 KPI principaux pour calculer un delta)
+        int prevYear = annee - 1;
+        Map<String, Long> prevYearKpi = new HashMap<>();
+        prevYearKpi.put("total",     missionRepository.countMissionsParAnnee(prevYear));
+        prevYearKpi.put("validated", missionRepository.countByStatutAndYear(StatutMission.INITIEE, prevYear));
+        prevYearKpi.put("cancelled", missionRepository.countByStatutAndYear(StatutMission.ANNULEE, prevYear));
+        prevYearKpi.put("pending",
+                missionRepository.countByStatutAndYear(StatutMission.PREVUE, prevYear)
+              + missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_FAVORABLE, prevYear));
+        Map<String, Object> previousYear = new HashMap<>();
+        previousYear.put("year",  prevYear);
+        previousYear.put("kpi",   prevYearKpi);
+        stats.put("previousYear", previousYear);
+
         return stats;
+    }
+
+    /**
+     * Activité des véhicules de l'année — même logique que pour les chauffeurs :
+     * tous les véhicules actifs inclus, triés DESC par nombre d'affectations.
+     */
+    private Map<String, Object> buildVehiculeStats(int annee) {
+        var vehicules = vehiculeRepository.findByActifTrue();
+
+        Map<Long, Long> countById = new HashMap<>();
+        for (Object[] row : affectationRepository.countAffectationsByVehiculeForYear(annee)) {
+            Long id    = ((Number) row[0]).longValue();
+            Long count = ((Number) row[1]).longValue();
+            countById.put(id, count);
+        }
+
+        List<Map<String, Object>> activity = vehicules.stream()
+                .map(v -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("idVehicule",      v.getIdVehicule());
+                    entry.put("immatriculation", v.getImmatriculation());
+                    entry.put("marque",          v.getMarque());
+                    entry.put("modele",          v.getModele());
+                    entry.put("missions",        countById.getOrDefault(v.getIdVehicule(), 0L));
+                    return entry;
+                })
+                .sorted(Comparator.comparingLong(
+                        (Map<String, Object> m) -> ((Number) m.get("missions")).longValue()).reversed())
+                .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("missionsPerVehicule", activity);
+
+        Map<String, Object> top = activity.stream()
+                .filter(m -> ((Number) m.get("missions")).longValue() > 0)
+                .findFirst()
+                .orElse(null);
+        result.put("topVehicule", top);
+
+        Map<String, Object> least = activity.stream()
+                .filter(m -> ((Number) m.get("missions")).longValue() > 0)
+                .reduce((a, b) -> b)
+                .orElse(null);
+        result.put("leastVehicule", least);
+
+        return result;
     }
 
     /**

@@ -99,4 +99,19 @@ public class AgentController {
         agentService.deactivateAgent(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
+
+    /** Réactive un agent désactivé (admin seul — workflow paramètres). */
+    @PatchMapping("/{id}/reactiver")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<Void> reactivateAgent(@PathVariable Long id) {
+        agentService.reactivateAgent(id);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    /** Vue admin des comptes (avec lastLoginAt + statut). */
+    @GetMapping("/comptes")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<List<com.carfo.gestion_missions.dto.AgentAccountView>> getComptes() {
+        return ResponseEntity.ok(agentService.listComptes());
+    }
 }

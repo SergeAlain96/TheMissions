@@ -116,6 +116,41 @@ public class AgentService {
         agentRepository.save(agent);
     }
 
+    @Transactional
+    public void reactivateAgent(Long id) {
+        Agent agent = getAgentById(id);
+        agent.setActif(true);
+        agentRepository.save(agent);
+    }
+
+    /** Vue compacte pour l'admin (onglet Paramètres → Comptes & sécurité). */
+    @Transactional(readOnly = true)
+    public java.util.List<com.carfo.gestion_missions.dto.AgentAccountView> listComptes() {
+        return agentRepository.findAll().stream()
+                .map(a -> new com.carfo.gestion_missions.dto.AgentAccountView(
+                        a.getIdAgent(),
+                        a.getMatricule(),
+                        a.getNom(),
+                        a.getPrenom(),
+                        a.getEmail(),
+                        a.getRole(),
+                        a.getDirection() != null ? a.getDirection().getNomDirection() : null,
+                        a.isActif(),
+                        a.getLastLoginAt()
+                ))
+                .sorted((x, y) -> {
+                    // Actifs d'abord, puis par dernière connexion DESC
+                    if (x.actif() != y.actif()) return x.actif() ? -1 : 1;
+                    java.time.LocalDateTime lx = x.lastLoginAt();
+                    java.time.LocalDateTime ly = y.lastLoginAt();
+                    if (lx == null && ly == null) return 0;
+                    if (lx == null) return 1;
+                    if (ly == null) return -1;
+                    return ly.compareTo(lx);
+                })
+                .toList();
+    }
+
     private String generateUniqueUsername(String nom, String prenom, Long currentAgentId) {
         String username = generateBaseUsername(nom, prenom);
         String base = username;

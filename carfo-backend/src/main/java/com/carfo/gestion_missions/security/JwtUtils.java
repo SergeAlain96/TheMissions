@@ -1,11 +1,13 @@
 package com.carfo.gestion_missions.security;
 
 import com.carfo.gestion_missions.entity.Agent;
+import com.carfo.gestion_missions.service.AppConfigService;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -19,11 +21,33 @@ public class JwtUtils {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    /** Fallback statique utilisé si AppConfig n'est pas encore initialisé (en millisecondes). */
     @Value("${jwt.expiration}")
-    private long jwtExpiration;
+    private long jwtExpirationFallback;
+
+    /** Lazy pour éviter une éventuelle dépendance circulaire avec SecurityConfig. */
+    private final AppConfigService appConfigService;
+
+    public JwtUtils(@Lazy AppConfigService appConfigService) {
+        this.appConfigService = appConfigService;
+    }
 
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    /** Durée d'expiration dynamique en ms (lue depuis AppConfig). */
+    private long expirationMs() {
+        try {
+            var cfg = appConfigService.get();
+            Integer hours = cfg.getJwtExpirationHours();
+            if (hours != null && hours > 0) {
+                return hours.longValue() * 3600_000L;
+            }
+        } catch (Exception ex) {
+            logger.debug("AppConfig indisponible pour JWT TTL — fallback statique : {}", ex.getMessage());
+        }
+        return jwtExpirationFallback;
     }
 
     public String generateToken(Agent agent) {
@@ -34,7 +58,7 @@ public class JwtUtils {
                 .claim("nom", agent.getNom())
                 .claim("prenom", agent.getPrenom())
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .setExpiration(new Date(System.currentTimeMillis() + expirationMs()))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }

@@ -24,11 +24,19 @@ public class MissionAutoClosureScheduler {
 
     private final MissionRepository missionRepository;
     private final MissionService missionService;
+    private final AppConfigService appConfigService;
 
     /** Cron : tous les jours à 01:00. */
     @Scheduled(cron = "0 0 1 * * *")
     @Transactional
     public void cloturerMissionsEchues() {
+        // Respecte le flag de l'admin (Paramètres → Règles métier)
+        var cfg = appConfigService.get();
+        if (!Boolean.TRUE.equals(cfg.getAutoClosureEnabled())) {
+            log.info("Auto-clôture désactivée par configuration — skip.");
+            return;
+        }
+
         LocalDate today = LocalDate.now();
         List<Mission> candidates = missionRepository.findByStatut(StatutMission.INITIEE).stream()
                 .filter(m -> m.getDateFin() != null && !m.getDateFin().isAfter(today))

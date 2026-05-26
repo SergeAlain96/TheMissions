@@ -23,6 +23,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final SecurityChecker securityChecker;
+    private final NotificationTemplateService templateService;
 
     // ------------------------------------------------------------------
     // PRODUCTION : appelée par les services métier sur événements
@@ -52,6 +53,45 @@ public class NotificationService {
                               String titre, String message, Long idMission) {
         if (destinataires == null) return;
         destinataires.forEach(a -> notifier(a, type, titre, message, idMission));
+    }
+
+    /**
+     * Notifie en utilisant le template configuré pour le type (Paramètres → Notifications).
+     * Si aucun template actif n'existe, retombe sur les valeurs `fallbackTitre` / `fallbackMessage`.
+     * Les `vars` sont interpolées dans le titre et le message du template via {key}.
+     */
+    @Transactional
+    public void notifierTousTemplate(Collection<Agent> destinataires, NotificationType type,
+                                      java.util.Map<String, String> vars,
+                                      String fallbackTitre, String fallbackMessage,
+                                      Long idMission) {
+        if (destinataires == null) return;
+        String[] resolved = resolveTemplate(type, vars, fallbackTitre, fallbackMessage);
+        destinataires.forEach(a -> notifier(a, type, resolved[0], resolved[1], idMission));
+    }
+
+    /** Version destinataire unique de {@link #notifierTousTemplate}. */
+    @Transactional
+    public void notifierTemplate(Agent destinataire, NotificationType type,
+                                  java.util.Map<String, String> vars,
+                                  String fallbackTitre, String fallbackMessage,
+                                  Long idMission) {
+        if (destinataire == null) return;
+        String[] resolved = resolveTemplate(type, vars, fallbackTitre, fallbackMessage);
+        notifier(destinataire, type, resolved[0], resolved[1], idMission);
+    }
+
+    /** Retourne [titre, message] depuis le template actif ou les fallbacks. */
+    private String[] resolveTemplate(NotificationType type, java.util.Map<String, String> vars,
+                                     String fallbackTitre, String fallbackMessage) {
+        var template = templateService.findActive(type).orElse(null);
+        if (template == null) {
+            return new String[]{ fallbackTitre, fallbackMessage };
+        }
+        return new String[]{
+                templateService.interpolate(template.getTitre(), vars),
+                templateService.interpolate(template.getCorps(), vars)
+        };
     }
 
     // ------------------------------------------------------------------
