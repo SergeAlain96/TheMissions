@@ -127,10 +127,20 @@ public class DataInitializer {
                 hash, "Chargée d'étude",         "+22670000021", RoleAgent.CHARGE_ETUDE,        false, dirs.get("DF")));
 
         // Chauffeurs (rattachés à la DMG, estChauffeur=true)
+        // 6 chauffeurs : permet de tester le multi-affectations (plusieurs voitures par mission)
+        // et la rotation lors de chevauchements de période.
         created += tryCreate(agent("DIALLO",    "Mamadou", "CH001",  "MDIALLO",    "chauffeur1@carfo.bf",
                 hash, "Chauffeur principal",     "+22670000030", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
         created += tryCreate(agent("KONATE",    "Seydou",  "CH002",  "SKONATE",    "chauffeur2@carfo.bf",
                 hash, "Chauffeur",               "+22670000031", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
+        created += tryCreate(agent("OUEDRAOGO", "Karim",   "CH003",  "KOUEDRAOGO", "chauffeur3@carfo.bf",
+                hash, "Chauffeur",               "+22670000032", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
+        created += tryCreate(agent("SAWADOGO",  "Adama",   "CH004",  "ASAWADOGO",  "chauffeur4@carfo.bf",
+                hash, "Chauffeur",               "+22670000033", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
+        created += tryCreate(agent("TRAORE",    "Brahima", "CH005",  "BTRAORE",    "chauffeur5@carfo.bf",
+                hash, "Chauffeur convoi",        "+22670000034", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
+        created += tryCreate(agent("KABORE",    "Salif",   "CH006",  "SKABORE",    "chauffeur6@carfo.bf",
+                hash, "Chauffeur convoi",        "+22670000035", RoleAgent.AGENT,               true,  dirs.get(SIGLE_DMG)));
 
         // Agents simples (participants potentiels)
         created += tryCreate(agent("NIKIEMA",   "Ousmane", "AG001",  "ONIKIEMA",   "agent1@carfo.bf",
@@ -203,6 +213,11 @@ public class DataInitializer {
         created += tryCreateVehicule("11CC7755", "Renault",    "Master",       "Utilitaire",   9,  LocalDate.of(2021, 4, 18));
         created += tryCreateVehicule("11DD4321", "Peugeot",    "508",          "Berline",      4,  LocalDate.of(2023, 9, 12));
         created += tryCreateVehicule("11DD8765", "Hyundai",    "H1",           "Minibus",     11,  LocalDate.of(2022, 12, 3));
+        // Véhicules complémentaires pour permettre le multi-affectations (gros convois)
+        created += tryCreateVehicule("11EE1010", "Toyota",     "Fortuner",     "SUV 4x4",      7,  LocalDate.of(2024, 2, 8));
+        created += tryCreateVehicule("11EE2020", "Ford",       "Ranger",       "Pick-up 4x4",  5,  LocalDate.of(2023, 5, 22));
+        created += tryCreateVehicule("11FF3030", "Iveco",      "Daily",        "Minibus",     16,  LocalDate.of(2022, 10, 15));
+        created += tryCreateVehicule("11FF4040", "Suzuki",     "Vitara",       "SUV",          5,  LocalDate.of(2024, 1, 30));
 
         if (created == 0) {
             log.info("DataInitializer: aucun nouveau vehicule a creer (tous deja presents).");

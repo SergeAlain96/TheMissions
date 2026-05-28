@@ -64,11 +64,15 @@ public class SchemaMigrationRunner {
     }
 
     /**
-     * Drop l'index UNIQUE (s'il existe) couvrant une colonne donnée. MySQL crée typiquement
-     * un index nommé UK_xxx ou similaire pour les contraintes UNIQUE. On le résout via
-     * INFORMATION_SCHEMA.STATISTICS plutôt que de deviner le nom.
+     * Drop tout index UNIQUE (sauf PRIMARY) qui couvre la colonne donnée — typiquement
+     * la contrainte historique générée par Hibernate quand l'entité était en @OneToOne(unique=true).
+     * On utilise une approche en deux passes :
+     *   1. Lecture des noms d'index dans une liste (pour éviter de garder un ResultSet ouvert
+     *      pendant qu'on exécute ALTER TABLE, ce qui peut bloquer sur certains drivers).
+     *   2. Exécution des DROP INDEX un par un.
      */
     private void dropUniqueIndexIfExists(Statement st, String table, String column) {
+        java.util.List<String> indexes = new java.util.ArrayList<>();
         String findSql = String.format("""
             SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
             WHERE TABLE_SCHEMA = DATABASE()
@@ -79,16 +83,25 @@ public class SchemaMigrationRunner {
             """, table, column);
         try (var rs = st.executeQuery(findSql)) {
             while (rs.next()) {
-                String indexName = rs.getString(1);
-                try (Statement st2 = st.getConnection().createStatement()) {
-                    st2.executeUpdate(String.format("ALTER TABLE %s DROP INDEX %s", table, indexName));
-                    log.info("Migration OK : DROP INDEX {} sur {}.{}", indexName, table, column);
-                } catch (Exception ex) {
-                    log.warn("Impossible de dropper l'index {} sur {}.{} : {}", indexName, table, column, ex.getMessage());
-                }
+                indexes.add(rs.getString(1));
             }
         } catch (Exception ex) {
-            log.debug("dropUniqueIndexIfExists skipped ({}) sur {}.{}", ex.getMessage(), table, column);
+            log.warn("dropUniqueIndexIfExists : recherche échouée sur {}.{} ({})", table, column, ex.getMessage());
+            return;
+        }
+
+        if (indexes.isEmpty()) {
+            log.info("Migration : aucun index UNIQUE trouvé sur {}.{} (probablement déjà droppé).", table, column);
+            return;
+        }
+
+        for (String indexName : indexes) {
+            try {
+                st.executeUpdate(String.format("ALTER TABLE %s DROP INDEX `%s`", table, indexName));
+                log.info("Migration OK : DROP INDEX `{}` sur {}.{}", indexName, table, column);
+            } catch (Exception ex) {
+                log.warn("Impossible de dropper l'index {} sur {}.{} : {}", indexName, table, column, ex.getMessage());
+            }
         }
     }
 }

@@ -24,8 +24,9 @@ public class AppConfigService {
     @PostConstruct
     @Transactional
     public void ensureInitialized() {
-        if (!repository.existsById(SINGLETON_ID)) {
-            AppConfig cfg = AppConfig.builder()
+        AppConfig cfg = repository.findById(SINGLETON_ID).orElse(null);
+        if (cfg == null) {
+            cfg = AppConfig.builder()
                     .idConfig(SINGLETON_ID)
                     .institutionNom("Caisse Autonome de Retraite des Fonctionnaires")
                     .institutionSigle("CARFO")
@@ -35,6 +36,47 @@ public class AppConfigService {
                     .build();
             repository.save(cfg);
             log.info("AppConfig: configuration par défaut initialisée.");
+            return;
+        }
+        // Migration : si la ligne existait avant l'ajout des champs "règles métier" / "sécurité",
+        // Hibernate ALTER a inséré 0/false/"" comme valeurs par défaut SQL. On les normalise.
+        boolean dirty = false;
+        if (cfg.getDelaiMinJoursOuvrables() == null || cfg.getDelaiMinJoursOuvrables() <= 0) {
+            cfg.setDelaiMinJoursOuvrables(10); dirty = true;
+        }
+        if (cfg.getReferencePrefix() == null || cfg.getReferencePrefix().isBlank()) {
+            cfg.setReferencePrefix("MIS"); dirty = true;
+        }
+        if (cfg.getReferenceNumberPadding() == null || cfg.getReferenceNumberPadding() < 2) {
+            cfg.setReferenceNumberPadding(3); dirty = true;
+        }
+        if (cfg.getAutoClosureEnabled() == null) {
+            cfg.setAutoClosureEnabled(true); dirty = true;
+        }
+        if (cfg.getExcludeWeekends() == null) {
+            cfg.setExcludeWeekends(true); dirty = true;
+        }
+        if (cfg.getSessionStrictMode() == null) {
+            cfg.setSessionStrictMode(false); dirty = true;
+        }
+        if (cfg.getPasswordMinLength() == null || cfg.getPasswordMinLength() < 4) {
+            cfg.setPasswordMinLength(8); dirty = true;
+        }
+        if (cfg.getPasswordRequireUppercase() == null) {
+            cfg.setPasswordRequireUppercase(false); dirty = true;
+        }
+        if (cfg.getPasswordRequireDigit() == null) {
+            cfg.setPasswordRequireDigit(true); dirty = true;
+        }
+        if (cfg.getPasswordRequireSpecial() == null) {
+            cfg.setPasswordRequireSpecial(false); dirty = true;
+        }
+        if (cfg.getJwtExpirationHours() == null || cfg.getJwtExpirationHours() <= 0) {
+            cfg.setJwtExpirationHours(24); dirty = true;
+        }
+        if (dirty) {
+            repository.save(cfg);
+            log.info("AppConfig : valeurs nulles/par-défaut SQL normalisées vers les défauts métier.");
         }
     }
 

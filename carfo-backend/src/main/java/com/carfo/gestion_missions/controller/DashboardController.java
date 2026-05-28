@@ -16,9 +16,12 @@ import java.util.Map;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final com.carfo.gestion_missions.service.StatistiquesExportService exportService;
 
-    public DashboardController(DashboardService dashboardService) {
+    public DashboardController(DashboardService dashboardService,
+                                com.carfo.gestion_missions.service.StatistiquesExportService exportService) {
         this.dashboardService = dashboardService;
+        this.exportService = exportService;
     }
 
     /**
@@ -61,5 +64,31 @@ public class DashboardController {
     @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
     public ResponseEntity<Map<String, Object>> getStatistics(@RequestParam(required = false) Integer year) {
         return ResponseEntity.ok(dashboardService.getStatistics(year));
+    }
+
+    /** Export PDF du rapport statistique annuel. */
+    @GetMapping(value = "/statistics/pdf", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
+    public ResponseEntity<byte[]> exportStatisticsPdf(@RequestParam(required = false) Integer year) {
+        int annee = year != null ? year : java.time.LocalDate.now().getYear();
+        byte[] pdf = exportService.exporterPdf(annee);
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .header("Content-Disposition",
+                        "attachment; filename=rapport-statistiques-" + annee + ".pdf")
+                .body(pdf);
+    }
+
+    /** Export CSV des données statistiques (pour Excel — séparateur ; + BOM UTF-8). */
+    @GetMapping(value = "/statistics/csv", produces = "text/csv; charset=UTF-8")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
+    public ResponseEntity<byte[]> exportStatisticsCsv(@RequestParam(required = false) Integer year) {
+        int annee = year != null ? year : java.time.LocalDate.now().getYear();
+        byte[] csv = exportService.exporterCsv(annee);
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .header("Content-Disposition",
+                        "attachment; filename=statistiques-" + annee + ".csv")
+                .body(csv);
     }
 }
