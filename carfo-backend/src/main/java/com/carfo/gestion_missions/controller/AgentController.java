@@ -118,6 +118,17 @@ public class AgentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(agentService.createAccount(request));
     }
 
+    /** Modifie le rôle et/ou l'email d'un compte existant — Admin. Body: { email?, role? }. */
+    @PatchMapping("/{id}/account")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<Agent> updateAccount(@PathVariable Long id,
+                                               @RequestBody java.util.Map<String, String> body) {
+        String email = body.get("email");
+        com.carfo.gestion_missions.enums.RoleAgent role =
+                body.get("role") != null ? com.carfo.gestion_missions.enums.RoleAgent.valueOf(body.get("role")) : null;
+        return ResponseEntity.ok(agentService.updateAccount(id, email, role));
+    }
+
     @PatchMapping("/{id}/desactiver")
     @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Void> deactivateAgent(@PathVariable Long id) {

@@ -155,6 +155,23 @@ public class AgentService {
         return agentRepository.save(agent);
     }
 
+    /** Modifie le rôle et/ou l'email d'un compte existant. */
+    @Transactional
+    public Agent updateAccount(Long idAgent, String email, com.carfo.gestion_missions.enums.RoleAgent role) {
+        Agent agent = getAgentById(idAgent);
+        if (email != null && !email.isBlank()
+                && (agent.getEmail() == null || !agent.getEmail().equalsIgnoreCase(email))) {
+            if (agentRepository.existsByEmail(email)) {
+                throw new DuplicateResourceException("Email déjà utilisé : " + email);
+            }
+            agent.setEmail(email);
+        }
+        if (role != null) {
+            agent.setRole(role);
+        }
+        return agentRepository.save(agent);
+    }
+
     @Transactional
     public void deactivateAgent(Long id) {
         Agent agent = getAgentById(id);
