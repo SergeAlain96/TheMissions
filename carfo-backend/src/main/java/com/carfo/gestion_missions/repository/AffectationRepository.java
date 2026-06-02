@@ -100,6 +100,25 @@ public interface AffectationRepository extends JpaRepository<Affectation, Long> 
     """)
     List<Object[]> countAffectationsByVehiculeForYear(@Param("annee") int annee);
 
+    // ───────── Variantes plage de dates ─────────
+    @Query("""
+        SELECT a.chauffeur.idAgent, COUNT(a)
+        FROM Affectation a
+        WHERE a.mission.dateDebut BETWEEN :from AND :to
+        GROUP BY a.chauffeur.idAgent
+    """)
+    List<Object[]> countAffectationsByChauffeurInRange(@Param("from") java.time.LocalDate from,
+                                                       @Param("to") java.time.LocalDate to);
+
+    @Query("""
+        SELECT a.vehicule.idVehicule, COUNT(a)
+        FROM Affectation a
+        WHERE a.mission.dateDebut BETWEEN :from AND :to
+        GROUP BY a.vehicule.idVehicule
+    """)
+    List<Object[]> countAffectationsByVehiculeInRange(@Param("from") java.time.LocalDate from,
+                                                      @Param("to") java.time.LocalDate to);
+
     // Affectations actives à la date donnée (mission couvrant la date, statut INITIEE,
     // affectation statut ACTIVE). Sert au calcul de statut "EN_MISSION" des chauffeurs.
     @Query("""

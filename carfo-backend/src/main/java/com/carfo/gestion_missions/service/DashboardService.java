@@ -119,22 +119,37 @@ public class DashboardService {
      * Renvoie les 6 métriques attendues par la page /statistiques :
      *  total, validated, cancelled, pending, byDirection, byMonth.
      */
+    /** Surcharge par année (défaut = 1er janv → 31 déc de l'année). */
     public Map<String, Object> getStatistics(Integer year) {
         int annee = (year != null) ? year : LocalDate.now().getYear();
-        log.info("Computing statistics for year {}", annee);
+        return getStatistics(LocalDate.of(annee, 1, 1), LocalDate.of(annee, 12, 31));
+    }
+
+    /**
+     * Module Statistiques filtré par plage de dates (dateDebut des missions ∈ [from, to]).
+     * Si from/to nuls → année courante.
+     */
+    public Map<String, Object> getStatistics(LocalDate from, LocalDate to) {
+        LocalDate today = LocalDate.now();
+        if (from == null) from = LocalDate.of(today.getYear(), 1, 1);
+        if (to == null)   to   = LocalDate.of(today.getYear(), 12, 31);
+        // Sécurité : si bornes inversées, on les remet dans l'ordre
+        if (to.isBefore(from)) { LocalDate tmp = from; from = to; to = tmp; }
+        log.info("Computing statistics from {} to {}", from, to);
 
         Map<String, Object> stats = new HashMap<>();
-        stats.put("year", annee);
+        stats.put("year", from.getYear());
+        stats.put("from", from.toString());
+        stats.put("to",   to.toString());
 
-        long total      = missionRepository.countMissionsParAnnee(annee);
-        long validated  = missionRepository.countByStatutAndYear(StatutMission.INITIEE, annee);
-        long cancelled  = missionRepository.countByStatutAndYear(StatutMission.ANNULEE, annee);
-        long closed     = missionRepository.countByStatutAndYear(StatutMission.CLOTUREE, annee);
-        long prevue     = missionRepository.countByStatutAndYear(StatutMission.PREVUE, annee);
-        long avisFav    = missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_FAVORABLE, annee);
-        long avisDefav  = missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_DEFAVORABLE, annee);
+        long total      = missionRepository.countMissionsInRange(from, to);
+        long validated  = missionRepository.countByStatutAndRange(StatutMission.INITIEE, from, to);
+        long cancelled  = missionRepository.countByStatutAndRange(StatutMission.ANNULEE, from, to);
+        long closed     = missionRepository.countByStatutAndRange(StatutMission.CLOTUREE, from, to);
+        long prevue     = missionRepository.countByStatutAndRange(StatutMission.PREVUE, from, to);
+        long avisFav    = missionRepository.countByStatutAndRange(StatutMission.AVIS_SG_FAVORABLE, from, to);
+        long avisDefav  = missionRepository.countByStatutAndRange(StatutMission.AVIS_SG_DEFAVORABLE, from, to);
 
-        // "pending" = mission encore en workflow (pas encore validée par le DG, pas annulée ni clôturée)
         long pending = prevue + avisFav;
 
         stats.put("totalMissions",      total);
@@ -143,7 +158,6 @@ public class DashboardService {
         stats.put("missionsClosed",     closed);
         stats.put("missionsPending",    pending);
 
-        // Détail par statut (utile pour graphe distribution)
         Map<String, Long> byStatus = new HashMap<>();
         byStatus.put("PREVUE",              prevue);
         byStatus.put("AVIS_SG_FAVORABLE",   avisFav);
@@ -153,43 +167,27 @@ public class DashboardService {
         byStatus.put("ANNULEE",             cancelled);
         stats.put("missionsByStatus", byStatus);
 
-        // Missions par direction (toute l'année, triée DESC) — [nom, count]
-        var byDirection = missionRepository.countMissionsByDirectionForYear(annee).stream()
-                .map(row -> Map.of(
-                        "direction", String.valueOf(row[0]),
-                        "count",     row[1]
-                ))
+        var byDirection = missionRepository.countMissionsByDirectionInRange(from, to).stream()
+                .map(row -> Map.of("direction", String.valueOf(row[0]), "count", row[1]))
                 .toList();
         stats.put("missionsByDirection", byDirection);
 
-        // Missions par mois — 12 cases (jan → déc), 0 si pas de mission
         long[] byMonth = new long[12];
-        for (Object[] row : missionRepository.countMissionsByMonthForYear(annee)) {
-            int mois = ((Number) row[0]).intValue(); // 1..12
+        for (Object[] row : missionRepository.countMissionsByMonthInRange(from, to)) {
+            int mois = ((Number) row[0]).intValue();
             long count = ((Number) row[1]).longValue();
-            if (mois >= 1 && mois <= 12) {
-                byMonth[mois - 1] = count;
-            }
+            if (mois >= 1 && mois <= 12) byMonth[mois - 1] = count;
         }
         stats.put("missionsByMonth", byMonth);
 
-        // Activité des chauffeurs sur l'année : tous les chauffeurs actifs sont inclus,
-        // même ceux à 0 affectation (utile pour voir qui n'a pas tourné).
-        stats.put("chauffeurStats", buildChauffeurStats(annee));
+        stats.put("chauffeurStats", buildChauffeurStats(from, to));
+        stats.put("vehiculeStats",  buildVehiculeStats(from, to));
 
-        // Activité des véhicules (symétrique aux chauffeurs)
-        stats.put("vehiculeStats", buildVehiculeStats(annee));
-
-        // Top 5 lieux les plus visités sur l'année
-        var topLieux = missionRepository.findTopLieuxForYear(annee).stream()
-                .map(row -> Map.of(
-                        "lieu",  String.valueOf(row[0]),
-                        "count", row[1]
-                ))
+        var topLieux = missionRepository.findTopLieuxInRange(from, to).stream()
+                .map(row -> Map.of("lieu", String.valueOf(row[0]), "count", row[1]))
                 .toList();
         stats.put("topLieux", topLieux);
 
-        // Indicateurs ressources (pas filtrés par année — état courant du système)
         Map<String, Object> ressources = new HashMap<>();
         ressources.put("totalAgents",          agentRepository.countByActif(true));
         ressources.put("totalChauffeurs",      agentRepository.countByEstChauffeurAndActif(true, true));
@@ -197,32 +195,30 @@ public class DashboardService {
                 com.carfo.gestion_missions.enums.StatutVehicule.DISPONIBLE));
         stats.put("ressources", ressources);
 
-        // Comparaison année N-1 (mêmes 4 KPI principaux pour calculer un delta)
-        int prevYear = annee - 1;
-        Map<String, Long> prevYearKpi = new HashMap<>();
-        prevYearKpi.put("total",     missionRepository.countMissionsParAnnee(prevYear));
-        prevYearKpi.put("validated", missionRepository.countByStatutAndYear(StatutMission.INITIEE, prevYear));
-        prevYearKpi.put("cancelled", missionRepository.countByStatutAndYear(StatutMission.ANNULEE, prevYear));
-        prevYearKpi.put("pending",
-                missionRepository.countByStatutAndYear(StatutMission.PREVUE, prevYear)
-              + missionRepository.countByStatutAndYear(StatutMission.AVIS_SG_FAVORABLE, prevYear));
+        // Comparaison période précédente de même durée (N-1 décalée)
+        long days = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+        LocalDate prevTo = from.minusDays(1);
+        LocalDate prevFrom = prevTo.minusDays(days - 1);
+        Map<String, Long> prevKpi = new HashMap<>();
+        prevKpi.put("total",     missionRepository.countMissionsInRange(prevFrom, prevTo));
+        prevKpi.put("validated", missionRepository.countByStatutAndRange(StatutMission.INITIEE, prevFrom, prevTo));
+        prevKpi.put("cancelled", missionRepository.countByStatutAndRange(StatutMission.ANNULEE, prevFrom, prevTo));
+        prevKpi.put("pending",
+                missionRepository.countByStatutAndRange(StatutMission.PREVUE, prevFrom, prevTo)
+              + missionRepository.countByStatutAndRange(StatutMission.AVIS_SG_FAVORABLE, prevFrom, prevTo));
         Map<String, Object> previousYear = new HashMap<>();
-        previousYear.put("year",  prevYear);
-        previousYear.put("kpi",   prevYearKpi);
+        previousYear.put("year", prevFrom.getYear());
+        previousYear.put("kpi",  prevKpi);
         stats.put("previousYear", previousYear);
 
         return stats;
     }
 
-    /**
-     * Activité des véhicules de l'année — même logique que pour les chauffeurs :
-     * tous les véhicules actifs inclus, triés DESC par nombre d'affectations.
-     */
-    private Map<String, Object> buildVehiculeStats(int annee) {
+    private Map<String, Object> buildVehiculeStats(LocalDate from, LocalDate to) {
         var vehicules = vehiculeRepository.findByActifTrue();
 
         Map<Long, Long> countById = new HashMap<>();
-        for (Object[] row : affectationRepository.countAffectationsByVehiculeForYear(annee)) {
+        for (Object[] row : affectationRepository.countAffectationsByVehiculeInRange(from, to)) {
             Long id    = ((Number) row[0]).longValue();
             Long count = ((Number) row[1]).longValue();
             countById.put(id, count);
@@ -265,13 +261,13 @@ public class DashboardService {
      * Renvoie une List<Map> triée par nombre de missions DESC, avec en bonus topChauffeur
      * et leastChauffeur côté payload sous une forme aplatie.
      */
-    private Map<String, Object> buildChauffeurStats(int annee) {
+    private Map<String, Object> buildChauffeurStats(LocalDate from, LocalDate to) {
         // 1. Tous les chauffeurs actifs (même à 0 affectation)
         List<Agent> chauffeurs = agentRepository.findAllChauffeurs();
 
-        // 2. Counts par chauffeur ayant affecté au moins 1 mission cette année
+        // 2. Counts par chauffeur ayant affecté au moins 1 mission sur la période
         Map<Long, Long> countByIdAgent = new HashMap<>();
-        for (Object[] row : affectationRepository.countAffectationsByChauffeurForYear(annee)) {
+        for (Object[] row : affectationRepository.countAffectationsByChauffeurInRange(from, to)) {
             Long idAgent = ((Number) row[0]).longValue();
             Long count   = ((Number) row[1]).longValue();
             countByIdAgent.put(idAgent, count);

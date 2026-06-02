@@ -24,6 +24,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final SecurityChecker securityChecker;
     private final NotificationTemplateService templateService;
+    private final com.carfo.gestion_missions.repository.AgentRepository agentRepository;
 
     // ------------------------------------------------------------------
     // PRODUCTION : appelée par les services métier sur événements
@@ -65,9 +66,17 @@ public class NotificationService {
                                       java.util.Map<String, String> vars,
                                       String fallbackTitre, String fallbackMessage,
                                       Long idMission) {
-        if (destinataires == null) return;
         String[] resolved = resolveTemplate(type, vars, fallbackTitre, fallbackMessage);
-        destinataires.forEach(a -> notifier(a, type, resolved[0], resolved[1], idMission));
+        java.util.Set<Long> alreadyNotified = new java.util.HashSet<>();
+        if (destinataires != null) {
+            for (Agent a : destinataires) {
+                if (a != null && a.getIdAgent() != null && alreadyNotified.add(a.getIdAgent())) {
+                    notifier(a, type, resolved[0], resolved[1], idMission);
+                }
+            }
+        }
+        // Broadcast aux admins (en copie de toutes les notifications métier)
+        broadcastAdmins(type, resolved[0], resolved[1], idMission, alreadyNotified);
     }
 
     /** Version destinataire unique de {@link #notifierTousTemplate}. */
@@ -76,9 +85,34 @@ public class NotificationService {
                                   java.util.Map<String, String> vars,
                                   String fallbackTitre, String fallbackMessage,
                                   Long idMission) {
-        if (destinataire == null) return;
         String[] resolved = resolveTemplate(type, vars, fallbackTitre, fallbackMessage);
-        notifier(destinataire, type, resolved[0], resolved[1], idMission);
+        java.util.Set<Long> alreadyNotified = new java.util.HashSet<>();
+        if (destinataire != null && destinataire.getIdAgent() != null) {
+            notifier(destinataire, type, resolved[0], resolved[1], idMission);
+            alreadyNotified.add(destinataire.getIdAgent());
+        }
+        broadcastAdmins(type, resolved[0], resolved[1], idMission, alreadyNotified);
+    }
+
+    /**
+     * Notifie tous les administrateurs actifs en plus des destinataires métier.
+     * Ainsi l'admin a une vue complète des événements de l'application sans avoir à requêter
+     * l'audit log à chaque fois. Les agents déjà notifiés (cas où un admin est aussi destinataire
+     * légitime) sont skippés via le Set `alreadyNotified`.
+     */
+    private void broadcastAdmins(NotificationType type, String titre, String message,
+                                  Long idMission, java.util.Set<Long> alreadyNotified) {
+        try {
+            var admins = agentRepository.findByRoleAndActifTrue(
+                    com.carfo.gestion_missions.enums.RoleAgent.ADMINISTRATEUR);
+            for (Agent admin : admins) {
+                if (admin.getIdAgent() != null && alreadyNotified.add(admin.getIdAgent())) {
+                    notifier(admin, type, titre, message, idMission);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Broadcast admin notif échoué ({}) : {}", type, ex.getMessage());
+        }
     }
 
     /** Retourne [titre, message] depuis le template actif ou les fallbacks. */

@@ -45,6 +45,13 @@ public class SchemaMigrationRunner {
             //    On résout dynamiquement le nom de l'index via information_schema.
             dropUniqueIndexIfExists(st, "affectation", "id_mission");
 
+            // 5. Rendre nullable email / mot_de_passe / role / username sur agent
+            //    (séparation agent identité vs compte d'accès).
+            safeExec(st, "ALTER TABLE agent MODIFY COLUMN email VARCHAR(255) NULL");
+            safeExec(st, "ALTER TABLE agent MODIFY COLUMN mot_de_passe VARCHAR(255) NULL");
+            safeExec(st, "ALTER TABLE agent MODIFY COLUMN role VARCHAR(40) NULL");
+            safeExec(st, "ALTER TABLE agent MODIFY COLUMN username VARCHAR(50) NULL");
+
             log.info("SchemaMigrationRunner : migrations idempotentes appliquées.");
         } catch (Exception e) {
             log.warn("SchemaMigrationRunner : échec global, certaines migrations n'ont pas été appliquées : {}",

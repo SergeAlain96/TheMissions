@@ -35,6 +35,7 @@ public class DataInitializer {
     private final DirectionRepository directionRepository;
     private final AgentRepository agentRepository;
     private final VehiculeRepository vehiculeRepository;
+    private final com.carfo.gestion_missions.repository.ProvinceRepository provinceRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Bean
@@ -43,6 +44,7 @@ public class DataInitializer {
             Map<String, Direction> directions = seedDirections();
             seedTestAgents(directions);
             seedTestVehicules();
+            seedProvinces();
         };
     }
 
@@ -243,5 +245,42 @@ public class DataInitializer {
                 .build();
         vehiculeRepository.save(v);
         return 1;
+    }
+
+    // ------------------------------------------------------------------
+    // Provinces du Burkina Faso (45) + chefs-lieux
+    // ------------------------------------------------------------------
+    private void seedProvinces() {
+        // [nom province, chef-lieu]
+        String[][] provinces = {
+            {"Balé", "Boromo"}, {"Bam", "Kongoussi"}, {"Banwa", "Solenzo"},
+            {"Bazèga", "Kombissiri"}, {"Bougouriba", "Diébougou"}, {"Boulgou", "Tenkodogo"},
+            {"Boulkiemdé", "Koudougou"}, {"Comoé", "Banfora"}, {"Ganzourgou", "Zorgho"},
+            {"Gnagna", "Bogandé"}, {"Gourma", "Fada N'Gourma"}, {"Houet", "Bobo-Dioulasso"},
+            {"Ioba", "Dano"}, {"Kadiogo", "Ouagadougou"}, {"Kénédougou", "Orodara"},
+            {"Komondjari", "Gayéri"}, {"Kompienga", "Pama"}, {"Kossi", "Nouna"},
+            {"Koulpélogo", "Ouargaye"}, {"Kouritenga", "Koupéla"}, {"Kourwéogo", "Boussé"},
+            {"Léraba", "Sindou"}, {"Loroum", "Titao"}, {"Mouhoun", "Dédougou"},
+            {"Nahouri", "Pô"}, {"Namentenga", "Boulsa"}, {"Nayala", "Toma"},
+            {"Noumbiel", "Batié"}, {"Oubritenga", "Ziniaré"}, {"Oudalan", "Gorom-Gorom"},
+            {"Passoré", "Yako"}, {"Poni", "Gaoua"}, {"Sanguié", "Réo"},
+            {"Sanmatenga", "Kaya"}, {"Séno", "Dori"}, {"Sissili", "Léo"},
+            {"Soum", "Djibo"}, {"Sourou", "Tougan"}, {"Tapoa", "Diapaga"},
+            {"Tuy", "Houndé"}, {"Yagha", "Sebba"}, {"Yatenga", "Ouahigouya"},
+            {"Ziro", "Sapouy"}, {"Zondoma", "Gourcy"}, {"Zoundwéogo", "Manga"}
+        };
+        int created = 0;
+        for (String[] p : provinces) {
+            if (!provinceRepository.existsByNom(p[0])) {
+                provinceRepository.save(com.carfo.gestion_missions.entity.Province.builder()
+                        .nom(p[0]).chefLieu(p[1]).build());
+                created++;
+            }
+        }
+        if (created > 0) {
+            log.info("DataInitializer: {} province(s) créée(s).", created);
+        } else {
+            log.info("DataInitializer: aucune nouvelle province (toutes déjà présentes).");
+        }
     }
 }

@@ -40,14 +40,16 @@ public class Agent implements UserDetails {
     @Column(name = "matricule", nullable = false, unique = true, length = 20)
     private String matricule;
 
-    // Ajouter ce champ après "matricule"
-    @Column(name = "username", nullable = false, unique = true, length = 50)
+    // Username : généré à la création du compte. Nullable tant qu'aucun compte n'existe.
+    @Column(name = "username", unique = true, length = 50)
     private String username;
 
-    @Column(name = "email", nullable = false, unique = true)
+    // Email : nullable tant que l'agent n'a pas de compte d'accès.
+    @Column(name = "email", unique = true)
     private String email;
 
-    @Column(name = "mot_de_passe", nullable = false)
+    // Mot de passe : nullable tant que l'agent n'a pas de compte d'accès.
+    @Column(name = "mot_de_passe")
     private String motDePasse;
 
     @Column(name = "fonction", length = 150)
@@ -74,8 +76,9 @@ public class Agent implements UserDetails {
     @Column(name = "date_disponibilite")
     private LocalDate dateDisponibilite;
 
+    // Rôle : nullable tant qu'aucun compte d'accès n'est attribué.
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false)
+    @Column(name = "role")
     private RoleAgent role;
 
     @Column(name = "actif", nullable = false)
@@ -112,7 +115,15 @@ public class Agent implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        // Agent sans compte (role null) : aucune autorité — ne peut pas s'authentifier.
+        if (role == null) return List.of();
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    /** True si l'agent a un compte d'accès (email + mot de passe + rôle définis). */
+    @com.fasterxml.jackson.annotation.JsonProperty("hasAccount")
+    public boolean hasAccount() {
+        return email != null && motDePasse != null && role != null;
     }
 
     @Override

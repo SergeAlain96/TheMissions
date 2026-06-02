@@ -62,7 +62,14 @@ public class DashboardController {
      */
     @GetMapping("/statistics")
     @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'SECRETAIRE_GENERALE', 'DIRECTEUR', 'DIRECTEUR_DIRECTION', 'CHARGE_ETUDE')")
-    public ResponseEntity<Map<String, Object>> getStatistics(@RequestParam(required = false) Integer year) {
+    public ResponseEntity<Map<String, Object>> getStatistics(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
+        // Si from/to fournis → filtre par plage ; sinon par année (ou année courante)
+        if (from != null || to != null) {
+            return ResponseEntity.ok(dashboardService.getStatistics(from, to));
+        }
         return ResponseEntity.ok(dashboardService.getStatistics(year));
     }
 

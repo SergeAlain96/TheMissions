@@ -81,7 +81,7 @@ public class AgentService {
     public Agent updateAgent(Long id, UpdateRequest request) {
         Agent agent = getAgentById(id);
 
-        if (!agent.getEmail().equalsIgnoreCase(request.getEmail())
+        if ((agent.getEmail() == null || !agent.getEmail().equalsIgnoreCase(request.getEmail()))
                 && agentRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("Email déjà utilisé : " + request.getEmail());
         }
@@ -106,6 +106,52 @@ public class AgentService {
         agent.setDirection(direction);
         agent.setActif(request.isActif());
 
+        return agentRepository.save(agent);
+    }
+
+    /**
+     * Crée un agent SANS compte d'accès (identité seule : nom, prénom, matricule, direction…).
+     * email / role / motDePasse / username restent null jusqu'à création du compte.
+     */
+    @Transactional
+    public Agent createAgentIdentity(com.carfo.gestion_missions.dto.AgentDTO.CreateAgentRequest request) {
+        if (agentRepository.existsByMatricule(request.getMatricule())) {
+            throw new DuplicateResourceException("Matricule déjà utilisé : " + request.getMatricule());
+        }
+        Direction direction = directionRepository.findById(request.getIdDirection())
+                .orElseThrow(() -> new ResourceNotFoundException("Direction introuvable : " + request.getIdDirection()));
+
+        Agent agent = Agent.builder()
+                .nom(request.getNom())
+                .prenom(request.getPrenom())
+                .matricule(request.getMatricule())
+                .fonction(request.getFonction())
+                .telephone(request.getTelephone())
+                .estChauffeur(request.isEstChauffeur())
+                .direction(direction)
+                .actif(true)
+                .build();
+        return agentRepository.save(agent);
+    }
+
+    /**
+     * Attribue un compte d'accès (email + rôle + mot de passe) à un agent existant.
+     * Échoue si l'agent a déjà un compte ou si l'email est déjà pris.
+     */
+    @Transactional
+    public Agent createAccount(com.carfo.gestion_missions.dto.AgentDTO.CreateAccountRequest request) {
+        Agent agent = getAgentById(request.getIdAgent());
+        if (agent.hasAccount()) {
+            throw new DuplicateResourceException("Cet agent possède déjà un compte d'accès.");
+        }
+        if (agentRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Email déjà utilisé : " + request.getEmail());
+        }
+        agent.setEmail(request.getEmail());
+        agent.setRole(request.getRole());
+        agent.setMotDePasse(passwordEncoder.encode(request.getMotDePasse()));
+        agent.setUsername(generateUniqueUsername(agent.getNom(), agent.getPrenom(), agent.getIdAgent()));
+        agent.setActif(true);
         return agentRepository.save(agent);
     }
 

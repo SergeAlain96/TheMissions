@@ -100,6 +100,46 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     """)
     List<Object[]> findTopLieuxForYear(@Param("annee") int annee);
 
+    // ───────── Variantes filtrées par plage de dates (dateDebut BETWEEN from AND to) ─────────
+
+    @Query("SELECT COUNT(m) FROM Mission m WHERE m.dateDebut BETWEEN :from AND :to")
+    long countMissionsInRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT COUNT(m) FROM Mission m
+        WHERE m.statut = :statut AND m.dateDebut BETWEEN :from AND :to
+    """)
+    long countByStatutAndRange(@Param("statut") StatutMission statut,
+                               @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT MONTH(m.dateDebut), COUNT(m)
+        FROM Mission m
+        WHERE m.dateDebut BETWEEN :from AND :to
+        GROUP BY MONTH(m.dateDebut)
+        ORDER BY MONTH(m.dateDebut) ASC
+    """)
+    List<Object[]> countMissionsByMonthInRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT d.nomDirection, COUNT(m)
+        FROM Mission m JOIN m.direction d
+        WHERE m.dateDebut BETWEEN :from AND :to
+        GROUP BY d.nomDirection
+        ORDER BY COUNT(m) DESC
+    """)
+    List<Object[]> countMissionsByDirectionInRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT m.lieu, COUNT(m)
+        FROM Mission m
+        WHERE m.dateDebut BETWEEN :from AND :to
+        GROUP BY m.lieu
+        ORDER BY COUNT(m) DESC
+        LIMIT 5
+    """)
+    List<Object[]> findTopLieuxInRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
     // Top 5 directions par nombre de missions
     @Query("""
         SELECT d.nomDirection as direction, COUNT(m) as count

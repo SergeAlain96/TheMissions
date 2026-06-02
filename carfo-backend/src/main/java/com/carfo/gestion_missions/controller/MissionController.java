@@ -95,9 +95,9 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getMissionDetail(id));
     }
 
-    // PATCH /api/missions/{id}/annuler — DG, SG ou Admin (le DMG ne peut pas annuler)
+    // PATCH /api/missions/{id}/annuler — Rejet : DG ou Admin uniquement (PAS le SG)
     @PatchMapping("/{id}/annuler")
-    @PreAuthorize("hasAnyRole('SECRETAIRE_GENERALE', 'DIRECTEUR', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('DIRECTEUR', 'ADMINISTRATEUR')")
     public ResponseEntity<Mission> annulerMission(@PathVariable Long id,
                                                    @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(missionService.annulerMission(id, body.get("motif")));

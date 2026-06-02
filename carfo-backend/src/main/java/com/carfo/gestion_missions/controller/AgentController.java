@@ -93,6 +93,31 @@ public class AgentController {
         return ResponseEntity.ok(agentService.updateAgent(id, request));
     }
 
+    /** Création d'un agent SANS compte d'accès (identité seule) — DMG ou Admin. */
+    @PostMapping("/identity")
+    @PreAuthorize("@securityChecker.isDmgOrAdmin()")
+    public ResponseEntity<Agent> createAgentIdentity(
+            @Valid @RequestBody com.carfo.gestion_missions.dto.AgentDTO.CreateAgentRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(agentService.createAgentIdentity(request));
+    }
+
+    /** Liste des agents SANS compte (pour le sélecteur de création de compte) — Admin. */
+    @GetMapping("/sans-compte")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<List<Agent>> getAgentsSansCompte() {
+        return ResponseEntity.ok(agentService.getAllAgents().stream()
+                .filter(a -> !a.hasAccount())
+                .toList());
+    }
+
+    /** Création d'un compte d'accès pour un agent existant — Admin. */
+    @PostMapping("/account")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<Agent> createAccount(
+            @Valid @RequestBody com.carfo.gestion_missions.dto.AgentDTO.CreateAccountRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(agentService.createAccount(request));
+    }
+
     @PatchMapping("/{id}/desactiver")
     @PreAuthorize("@securityChecker.isDmgOrAdmin()")
     public ResponseEntity<Void> deactivateAgent(@PathVariable Long id) {
