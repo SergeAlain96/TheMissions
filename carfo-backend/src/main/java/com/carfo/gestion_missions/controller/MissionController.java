@@ -25,6 +25,7 @@ public class MissionController {
 
     private final MissionService missionService;
     private final FicheMissionService ficheMissionService;
+    private final com.carfo.gestion_missions.security.SecurityChecker securityChecker;
 
     // GET /api/missions — toutes les missions
     @GetMapping
@@ -64,12 +65,18 @@ public class MissionController {
     @PostMapping("/soumettre")
     @PreAuthorize("hasAnyRole('DIRECTEUR_DIRECTION', 'DIRECTEUR', 'CHARGE_ETUDE', 'ADMINISTRATEUR')")
     public ResponseEntity<Mission> soumettreMission(@RequestBody MissionRequest request) {
+        // La direction de la mission = celle du créateur connecté (plus de sélection manuelle).
+        // Fallback sur request.idDirection si pas de session (ex: profil dev-noauth).
+        Long idDirection = securityChecker.getCurrentAgent()
+                .map(a -> a.getDirection() != null ? a.getDirection().getIdDirection() : null)
+                .orElse(request.getIdDirection());
+
         Mission mission = missionService.soumettreMission(
                 request.getDateDebut(),
                 request.getDateFin(),
                 request.getLieu(),
                 request.getObjetMission(),
-                request.getIdDirection(),
+                idDirection,
                 request.getIdAgents(),
                 request.getRolesMission(),
                 request.getIdChefMission());

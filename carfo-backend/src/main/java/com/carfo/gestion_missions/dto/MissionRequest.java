@@ -22,7 +22,7 @@ public class MissionRequest {
     @NotBlank(message = "L'objet de la mission est obligatoire")
     private String objetMission;
 
-    @NotNull(message = "La direction est obligatoire")
+    // Optionnel : la direction est déduite du créateur connecté côté serveur.
     private Long idDirection;
 
     private List<Long> idAgents;

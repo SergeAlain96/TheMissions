@@ -1,0 +1,377 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CARFO Design Tokens — palette clair (défaut) */
+:root {
+  --carfo-primary: #16A34A;
+  --carfo-primary-light: #22C55E;
+  --carfo-primary-lighter: #4ADE80;
+  --carfo-secondary: #D4AF37;
+  --carfo-accent: #8B0000;
+  --carfo-success: #15803D;
+  --carfo-warning: #B45309;
+  --carfo-error: #B91C1C;
+  --carfo-info: #1D4ED8;
+  --ink-50:  #F8FAFC;
+  --ink-100: #F1F5F9;
+  --ink-200: #E2E8F0;
+  --ink-300: #CBD5E1;
+  --ink-400: #94A3B8;
+  --ink-500: #64748B;
+  --ink-600: #475569;
+  --ink-700: #334155;
+  --ink-800: #1E293B;
+  --ink-900: #0F172A;
+
+  /* Tokens sémantiques (utilisés par les composants au lieu des palettes brutes) */
+  --bg-page:        var(--ink-50);
+  --bg-surface:     #FFFFFF;
+  --bg-surface-alt: var(--ink-100);
+  --border-default: var(--ink-200);
+  --text-primary:   var(--ink-900);
+  --text-secondary: var(--ink-500);
+}
+
+/* Palette sombre — appliquée quand <html class="dark"> */
+html.dark {
+  --carfo-primary: #22C55E;            /* légèrement plus vif pour rester lisible sur fond sombre */
+  --carfo-primary-light: #4ADE80;
+  --carfo-primary-lighter: #86EFAC;
+
+  /* Inversion de l'échelle ink : ink-900 devient clair, ink-50 devient foncé */
+  --ink-50:  #0F172A;
+  --ink-100: #1E293B;
+  --ink-200: #334155;
+  --ink-300: #475569;
+  --ink-400: #64748B;
+  --ink-500: #94A3B8;
+  --ink-600: #CBD5E1;
+  --ink-700: #E2E8F0;
+  --ink-800: #F1F5F9;
+  --ink-900: #F8FAFC;
+
+  --bg-page:        #0B1220;           /* fond page bien sombre */
+  --bg-surface:     #111827;           /* cards */
+  --bg-surface-alt: #1F2937;           /* hover, headers de table */
+  --border-default: #1F2937;
+  --text-primary:   #F1F5F9;
+  --text-secondary: #94A3B8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'liga' 1, 'kern' 1;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  /* Hérite de la couleur du parent (ex: text-white sur un hero sombre).
+     Les contextes clairs utilisent text-ink-900 explicite. */
+  color: inherit;
+}
+
+a {
+  color: var(--carfo-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover { color: var(--carfo-primary-light); }
+
+button { cursor: pointer; border: none; font-family: inherit; }
+
+::selection {
+  background: rgba(13, 92, 63, 0.18);
+  color: var(--ink-900);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared utility classes                                              */
+/* ------------------------------------------------------------------ */
+
+/* Page shell — clean light background, NO fixed overlay */
+.carfo-page-shell {
+  min-height: 100vh;
+  background-color: var(--ink-50);
+}
+
+/* Card surface */
+.carfo-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.05);
+  transition:
+    box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 0.5rem;
+  transition:
+    background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.15s ease;
+  white-space: nowrap;
+  line-height: 1;
+  will-change: transform;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 80ms;
+}
+
+/* a.btn : neutralise la couleur de lien globale (sinon a:hover repeint le texte) */
+a.btn, a.btn:hover { text-decoration: none; }
+
+.btn-primary,
+a.btn-primary,
+a.btn-primary:hover {
+  background-color: var(--carfo-primary);
+  color: #ffffff;
+}
+.btn-primary:hover:not(:disabled),
+a.btn-primary:hover:not(:disabled) {
+  background-color: var(--carfo-primary-light);
+  color: #ffffff;
+}
+
+.btn-secondary,
+a.btn-secondary {
+  background-color: var(--bg-surface);
+  color: var(--ink-700);
+  border: 1px solid var(--ink-300);
+}
+.btn-secondary:hover:not(:disabled),
+a.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-alt);
+  border-color: var(--ink-400);
+  color: var(--ink-900);
+}
+
+.btn-danger,
+a.btn-danger,
+a.btn-danger:hover {
+  background-color: var(--carfo-error);
+  color: #ffffff;
+}
+.btn-danger:hover:not(:disabled),
+a.btn-danger:hover:not(:disabled) { background-color: #991B1B; color: #ffffff; }
+
+.btn-ghost,
+a.btn-ghost {
+  background-color: transparent;
+  color: var(--ink-600);
+}
+.btn-ghost:hover:not(:disabled),
+a.btn-ghost:hover:not(:disabled) {
+  background-color: var(--ink-100);
+  color: var(--ink-900);
+}
+
+/* Inputs */
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--ink-300);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--carfo-primary);
+  box-shadow: 0 0 0 3px rgba(13, 92, 63, 0.12);
+}
+.input::placeholder { color: var(--ink-400); }
+
+label.label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-700);
+  margin-bottom: 0.375rem;
+}
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--ink-200) 25%, var(--ink-100) 37%, var(--ink-200) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 0.375rem;
+}
+
+/* ============================================================ */
+/* Floating bubbles — décoration du hero login (palette CARFO)   */
+/* ============================================================ */
+.bubbles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(1px);
+  opacity: 0.45;
+  will-change: transform, opacity;
+  animation: float-bubble var(--bubble-duration, 18s) ease-in-out infinite;
+  animation-delay: var(--bubble-delay, 0s);
+}
+
+/* Variantes harmonieuses (CARFO green + gold) */
+.bubble--emerald { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), rgba(43,160,101,0.4) 60%, rgba(13,92,63,0.0)); }
+.bubble--gold    { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), rgba(221,185,75,0.45) 55%, rgba(180,139,34,0.0)); }
+.bubble--mint    { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.7),  rgba(168,218,191,0.4) 60%, rgba(115,194,149,0.0)); }
+.bubble--white   { background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.7),  rgba(255,255,255,0.15) 60%, rgba(255,255,255,0.0)); }
+
+@keyframes float-bubble {
+  0%   { transform: translate(0, 0) scale(1);        opacity: 0.35; }
+  25%  { transform: translate(20px, -30px) scale(1.05); opacity: 0.5; }
+  50%  { transform: translate(-15px, -55px) scale(0.95); opacity: 0.45; }
+  75%  { transform: translate(25px, -30px) scale(1.03); opacity: 0.4; }
+  100% { transform: translate(0, 0) scale(1);        opacity: 0.35; }
+}
+
+/* ============================================================ */
+/* DARK MODE — overrides globaux                                  */
+/* Les composants utilisant des classes Tailwind hardcodées       */
+/* (bg-white, bg-ink-*, text-ink-*, bg-blue-50, etc.) sont        */
+/* automatiquement adaptés en mode sombre via ces règles.         */
+/* ============================================================ */
+
+html.dark body { background-color: #0B1220; color: #F1F5F9; }
+
+/* Surfaces neutres */
+html.dark .bg-white      { background-color: #111827 !important; }
+html.dark .bg-ink-50     { background-color: #0F172A !important; }
+html.dark .bg-ink-100    { background-color: #1E293B !important; }
+html.dark .bg-ink-100\/40,
+html.dark .bg-ink-50\/50 { background-color: rgba(30, 41, 59, 0.6) !important; }
+
+/* Bordures */
+html.dark .border-ink-100 { border-color: #1F2937 !important; }
+html.dark .border-ink-200 { border-color: #1F2937 !important; }
+html.dark .border-ink-300 { border-color: #334155 !important; }
+html.dark .divide-ink-100 > * + *,
+html.dark .divide-ink-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1F2937 !important; }
+
+/* Textes neutres */
+html.dark .text-ink-900 { color: #F8FAFC !important; }
+html.dark .text-ink-800 { color: #F1F5F9 !important; }
+html.dark .text-ink-700 { color: #E2E8F0 !important; }
+html.dark .text-ink-600 { color: #CBD5E1 !important; }
+html.dark .text-ink-500 { color: #94A3B8 !important; }
+html.dark .text-ink-400 { color: #64748B !important; }
+
+/* Accents colorés — fond léger devient transparent foncé pour rester lisible */
+html.dark .bg-amber-50    { background-color: rgba(180, 83, 9, 0.18) !important; }
+html.dark .bg-amber-50\/40 { background-color: rgba(180, 83, 9, 0.12) !important; }
+html.dark .text-amber-700 { color: #FCD34D !important; }
+html.dark .text-amber-600 { color: #FBBF24 !important; }
+
+html.dark .bg-blue-50     { background-color: rgba(29, 78, 216, 0.18) !important; }
+html.dark .bg-blue-50\/40 { background-color: rgba(29, 78, 216, 0.12) !important; }
+html.dark .text-blue-700  { color: #93C5FD !important; }
+html.dark .text-blue-600  { color: #60A5FA !important; }
+html.dark .text-blue-500  { color: #60A5FA !important; }
+
+html.dark .bg-emerald-50  { background-color: rgba(16, 163, 74, 0.18) !important; }
+html.dark .text-emerald-700 { color: #6EE7B7 !important; }
+html.dark .text-emerald-600 { color: #34D399 !important; }
+
+html.dark .bg-rose-50    { background-color: rgba(225, 29, 72, 0.18) !important; }
+html.dark .text-rose-700 { color: #FDA4AF !important; }
+
+html.dark .bg-red-50     { background-color: rgba(185, 28, 28, 0.18) !important; }
+html.dark .text-red-700  { color: #FCA5A5 !important; }
+html.dark .text-red-600  { color: #F87171 !important; }
+html.dark .text-red-500  { color: #FCA5A5 !important; }
+
+html.dark .bg-purple-50  { background-color: rgba(126, 34, 206, 0.18) !important; }
+html.dark .text-purple-700 { color: #C4B5FD !important; }
+
+html.dark .bg-carfo-50   { background-color: rgba(22, 163, 74, 0.18) !important; }
+
+/* Hovers et états neutres */
+html.dark .hover\:bg-white:hover   { background-color: #1F2937 !important; }
+html.dark .hover\:bg-ink-50:hover  { background-color: #1F2937 !important; }
+html.dark .hover\:bg-ink-100:hover { background-color: #1F2937 !important; }
+html.dark .hover\:border-ink-300:hover { border-color: #475569 !important; }
+html.dark .hover\:text-ink-900:hover { color: #F8FAFC !important; }
+html.dark .hover\:text-ink-700:hover { color: #E2E8F0 !important; }
+html.dark .hover\:bg-ink-50\/50:hover { background-color: rgba(31, 41, 55, 0.5) !important; }
+
+/* Inputs : focus ring inchangé (vert), juste fond + texte */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #111827;
+  color: #F1F5F9;
+  border-color: #334155;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #64748B; }
+
+/* Modales : conserver le backdrop semi-transparent (déjà OK) */
+html.dark .bg-ink-900\/50 { background-color: rgba(0, 0, 0, 0.75) !important; }
+
+/* Boutons ghost — adapter pour mode sombre */
+html.dark .btn-ghost { color: var(--ink-600); }
+html.dark .btn-ghost:hover:not(:disabled) {
+  background-color: #1F2937;
+  color: var(--ink-900);
+}
+
+/* Tables : header gris très clair en mode dark */
+html.dark thead tr.bg-ink-50 { background-color: #1F2937 !important; }
+
+/* Selection text */
+html.dark ::selection { background: rgba(34, 197, 94, 0.35); color: #F1F5F9; }
+
+/* Respecter le souhait des utilisateurs sensibles aux animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .bubble { display: none; }
+}
